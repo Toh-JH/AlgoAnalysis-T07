@@ -1,0 +1,303 @@
+
+============================================================================
+  CSD3130/CSD3131 Assignment Part 1 - QUESTION 2
+  (a) Orders of growth: LIS at O(n lg n) and exact TSP at O(n * n!)
+  (b) LTA fare-band audit satisfying T(n) = 3T(n/3) + lg n
+============================================================================
+
+============ THE SEVEN ORDERS OF GROWTH ============
+  Basic operations performed by an algorithm of each class, for input size n.
+  This is the whole argument for asymptotic analysis in one table: the classes
+  separate so violently that constant factors stop mattering.
+
+     n      O(1)     O(lg n)        O(n)     O(n lg n)        O(n^2)        O(2^n)         O(n!)
+     1         1           0           1             0             1             2             1
+     2         1           1           2             2             4             4             2
+     4         1           2           4             8            16            16            24
+     8         1           3           8            24            64           256         40320
+    16         1           4          16            64           256         65536      2.09e+13
+    32         1           5          32           160          1024      4.29e+09      2.63e+35
+    64         1           6          64           384          4096      1.84e+19      1.27e+89
+   128         1           7         128           896         16384      3.40e+38     3.86e+215
+
+  Reading the table:
+    constant      doubling n changes nothing at all.
+    logarithmic   doubling n adds ONE step; 128 items cost 7 probes, not 128.
+    linear        doubling n doubles the work - the natural cost of reading input.
+    linearithmic  doubling n slightly more than doubles it (+n extra); this is the
+                  ceiling for any sorting algorithm that only compares keys.
+    polynomial    doubling n multiplies the work by 2^k for n^k; still tractable.
+    exponential   ADDING ONE to n doubles the work; tractable only for tiny n.
+    factorial     adding one to n multiplies the work by n; 20! already exceeds the
+                  number of seconds since the Big Bang at one operation per ns.
+
+===== LINEARITHMIC O(n lg n) : LONGEST RUN-UP IN COE PREMIUMS =====
+
+  24 months of Category A quota premiums (SGD, illustrative):
+     78000  82000  76000  85000  91000  88000  94000  90000
+     97000  93000 102000 106000  99000 104000 110000 107000
+    113000 108000 115000 119000 112000 121000 118000 125000
+   
+  Longest non-consecutive rising chain has length 14:
+     78000  82000  85000  88000  90000  93000  99000 104000
+    107000 108000 115000 119000 121000 125000
+
+  Cross-check with the O(n^2) dynamic programme: length 14  (agrees)
+  Binary-search probes used by the O(n lg n) method : 61
+  Inner-loop tests used by the O(n^2) method        : 276
+  n = 24, n lg n = 110, n^2 = 576
+
+===== EVIDENCE THAT THE LIS ALGORITHM IS LINEARITHMIC =====
+  If the cost were linear, probes/n would be constant.
+  If it is linearithmic, probes/n grows like lg n while probes/(n lg n) settles.
+
+         n        probes    probes/n probes/(n lg n)    time(ms)  time/(n lg n) ns
+     10000         68967       6.897          0.5190        0.44            3.3482
+     20000        148268       7.413          0.5189        0.86            2.9984
+     40000        317607       7.940          0.5194        1.56            2.5570
+     80000        673406       8.418          0.5168        3.27            2.5079
+    160000       1433438       8.959          0.5182        6.89            2.4927
+    320000       3018932       9.434          0.5159       15.17            2.5929
+    640000       6374468       9.960          0.5164       32.16            2.6054
+   1280000      13373105      10.448          0.5150       68.51            2.6383
+
+  probes/n climbs steadily (it is tracking lg n) while probes/(n lg n)
+  flattens out: the cost is Theta(n lg n), not Theta(n).
+
+  --- COMPARATIVE STUDY : the same answer at O(n^2) ---
+         n    O(n lg n) ms       O(n^2) ms      speed-up
+      2000            0.19            5.70         29.8x
+      4000            0.14           25.64        177.4x
+      8000            0.29          102.47        350.6x
+     16000            0.60          411.49        685.8x
+     32000            1.27         1619.57       1276.4x
+
+===== FACTORIAL O(n * n!) : SHORTEST ONE-DAY WALKING TOUR =====
+
+  Attractions (9):
+    0  Merlion Park
+    1  Marina Bay Sands
+    2  Gardens by the Bay
+    3  Esplanade
+    4  Singapore Flyer
+    5  Clarke Quay
+    6  Chinatown
+    7  Bugis
+    8  Kampong Glam
+
+  Tours examined : 362880   (9! = 362880)
+  Optimal closed tour length : 6.3829 km
+  Route: Merlion Park -> Chinatown -> Clarke Quay -> Bugis -> Kampong Glam -> Singapore Flyer -> Gardens by the Bay -> Marina Bay Sands -> Esplanade -> Merlion Park
+  Time: 2.28 ms
+  Held-Karp O(n^2 2^n) cross-check: 6.3829 km
+
+===== EVIDENCE THAT BRUTE-FORCE TSP IS FACTORIAL =====
+  Factorial growth has a signature: t(n)/t(n-1) tends to n itself.
+
+    n            n!         tours      time(ms)     t(n)/t(n-1)      vs n
+    5           120           120          0.00               -         5
+    6           720           720          0.00            3.58         6
+    7          5040          5040          0.03            6.58         7
+    8         40320         40320          0.24            8.43         8
+    9        362880        362880          2.32            9.74         9
+   10       3628800       3628800         26.52           11.42        10
+   11      3.99e+07      39916800        322.80           12.17        11
+
+  The ratio column tracks n, so each extra attraction multiplies the work
+  by about n. Extrapolating, n = 20 would need roughly 2.4e18 tours: at one
+  billion tours per second that is about 77 years.
+
+  --- COMPARATIVE STUDY : Held-Karp O(n^2 2^n) on the same data ---
+    n   brute force(ms)     Held-Karp(ms)    same answer?
+    8              0.25              0.04             yes
+    9              2.40              0.07             yes
+   10             26.78              0.18             yes
+   11            319.50              0.38             yes
+
+  Held-Karp is still exponential, but 2^n grows far more slowly than n!,
+  which is why it remains usable where enumeration has already collapsed.
+
+===== PART (b) : LTA DISTANCE-FARE BAND AUDIT, T(n) = 3T(n/3) + lg n =====
+
+  North-South Line, cumulative distance from Jurong East (illustrative):
+     0  Jurong East            0.0 km
+     1  Bukit Batok            1.9 km
+     2  Bukit Gombak           3.2 km
+     3  Choa Chu Kang          5.6 km
+     4  Yew Tee                7.6 km
+     5  Kranji                10.2 km
+     6  Marsiling             11.7 km
+     7  Woodlands             13.0 km
+     8  Admiralty             14.9 km
+     9  Sembawang             17.0 km
+    10  Canberra              18.7 km
+    11  Yishun                20.7 km
+    12  Khatib                21.9 km
+    13  Yio Chu Kang          24.2 km
+    14  Ang Mo Kio            26.2 km
+    15  Bishan                28.0 km
+    16  Braddell              29.1 km
+    17  Toa Payoh             30.3 km
+    18  Novena                31.7 km
+    19  Newton                33.0 km
+    20  Orchard               34.1 km
+    21  Somerset              34.8 km
+    22  Dhoby Ghaut           35.7 km
+    23  City Hall             36.7 km
+    24  Raffles Place         37.4 km
+    25  Marina Bay            38.4 km
+    26  Marina South Pier     39.5 km
+
+  Fare band cap under audit: 10.0 km
+
+  RESULT
+    stretches audited (recursion nodes) : 13
+    fewest stations inside one band     : 3  (stretch beginning at Jurong East)
+    most stations inside one band       : 9
+    total stations-within-band counted  : 52
+    binary-search probes (the lg n term): 26
+    time: 0.0010 ms
+
+  THE RECURSION TREE, MEASURED
+    Each level holds 3x as many stretches as the one above, and each
+    stretch is 1/3 the size, so the per-level cost barely falls while the
+    node count explodes - which is why the leaves dominate and T(n)=Theta(n).
+
+   level     nodes       3^level        probes       probes/node
+       0         1             1             5              5.00
+       1         3             3            12              4.00
+       2         9             9             9              1.00
+
+===== PART (b) : DOES THE PROGRAM REALLY OBEY T(n) = 3T(n/3) + lg n? =====
+
+  (1) MEASURED COST vs THE RECURRENCE EVALUATED SYMBOLICALLY
+      The recurrence is unrolled independently with the same split rule and
+      cost model. Equality for every n is a direct proof that the program
+      implements the intended recurrence.
+
+           n        measured      3T(n/3)+lg n       match
+           3               1                 1         yes
+           9               7                 7         yes
+          27              26                26         yes
+          81              85                85         yes
+         100             143               143         yes
+         243             263               263         yes
+         729             799               799         yes
+        1000            2044              2044         yes
+        2187            2409              2409         yes
+        6561            7240              7240         yes
+       12345           19268             19268         yes
+       19683           21735             21735         yes
+       59049           65221             65221         yes
+
+  (2) THE MASTER METHOD SAYS Theta(n).  IS THE MEASURED COST LINEAR?
+      If T(n) = Theta(n) then cost/n is constant and tripling n triples cost.
+
+     n = 3^k          probes      probes/n    cost(n)/cost(n/3)      time(ms)   time/n (ns)
+           3               1        0.3333                    -         0.000          66.7
+           9               7        0.7778               7.0000         0.001          55.6
+          27              26        0.9630               3.7143         0.000          18.5
+          81              85        1.0494               3.2692         0.001           7.4
+         243             263        1.0823               3.0941         0.001           4.9
+         729             799        1.0960               3.0380         0.003           4.5
+        2187            2409        1.1015               3.0150         0.009           4.3
+        6561            7240        1.1035               3.0054         0.029           4.4
+       19683           21735        1.1043               3.0021         0.088           4.5
+       59049           65221        1.1045               3.0007         0.262           4.4
+      177147          195681        1.1046               3.0003         0.922           5.2
+      531441          587063        1.1047               3.0001         2.436           4.6
+     1594323         1761210        1.1047               3.0000         7.484           4.7
+
+      probes/n settles on a constant and the ratio column settles on 3:
+      tripling the input triples the work. That is Theta(n), exactly as
+      Case 1 of the Master Theorem predicts.
+
+  (3) THE SUBSTITUTION METHOD, CHECKED NUMERICALLY
+      The induction needs the lower-order slack terms. The claim proved in
+      the report is  T(n) <= c*n - d*lg n - e  with c = 4, d = 1, e = 2.4.
+      c = 4 (rather than 2) is what covers the base cases n = 1 and n = 2,
+      which the split rule really does reach: n = 4 splits into 1, 1, 2.
+
+           n   T(n) measured       4n - lg n - 2.4      holds?
+           1               1                  1.60         yes
+           2               1                  4.60         yes
+           3               1                  8.02         yes
+           4               6                 11.60         yes
+           5               6                 15.28         yes
+           9               7                 30.43         yes
+          27              26                100.85         yes
+          81              85                315.26         yes
+         243             263                961.68         yes
+         729             799               2904.09         yes
+        2187            2409               8734.51         yes
+        6561            7240              26228.92         yes
+       19683           21735              78715.34         yes
+       59049           65221             236177.75         yes
+
+  (4) COMPARATIVE STUDY : WHAT IF THE COMBINE WERE LINEAR INSTEAD?
+      Replacing the binary search with a scan gives T(n) = 3T(n/3) + n,
+      which is Master Case 2 => Theta(n lg n). The extra lg n factor is
+      visible in the ratio column below.
+
+           n        lg-combine    linear-combine         ratio
+          81                85               324          3.81
+         243               263              1215          4.62
+         729               799              4374          5.47
+        2187              2409             15309          6.35
+        6561              7240             52488          7.25
+       19683             21735            177147          8.15
+       59049             65221            590490          9.05
+      177147            195681           1948617          9.96
+      531441            587063           6377292         10.86
+
+==================== TEST SUITE (Question 2) ====================
+
+  TC01  LIS: O(n lg n) result equals the O(n^2) dynamic programme
+    [PASS] agreement on 200 random arrays (n up to 120, many duplicates)
+
+  TC02  LIS: boundary inputs
+    [PASS] empty input gives length 0
+    [PASS] single element gives length 1
+    [PASS] all values equal gives length 1 (strictly increasing required)
+    [PASS] already increasing gives length n
+    [PASS] strictly decreasing gives length 1
+
+  TC03  LIS: the reconstructed chain is genuinely a rising subsequence
+    [PASS] 100 random reconstructions are valid subsequences of the reported length
+    [PASS] COE data set: chain of length 14 recovered and valid  (length 14)
+
+  TC04  LIS: the cost is linearithmic, not linear
+    [PASS] probes/n RISES with n (so it is not Theta(n))  (8.578 -> 10.126)
+    [PASS] probes/(n lg n) stays within 10% across an 8x size increase  (0.5165 vs 0.5164)
+
+  TC05  TSP: brute force agrees with Held-Karp
+    [PASS] 12 random instances of 4..9 cities give identical optimal length
+
+  TC06  TSP: the enumeration really visits n! tours
+    [PASS] tours evaluated == n! for n = 1..9 (9! = 362880)
+
+  TC07  TSP: growth ratio approaches n (factorial signature)
+    [PASS] both ratios lie in [5,18], bracketing n = 10 and n = 11  (t10/t9 = 9.83, t11/t10 = 11.85)
+
+  TC08  Fare audit: binary-search version equals the linear-scan oracle
+    [PASS] identical results on 200 random lines of up to 400 stations
+
+  TC09  Fare audit: measured cost == T(n) = 3T(n/3) + lg n, exactly
+    [PASS] exact match for EVERY n from 1 to 1500, not just powers of 3
+
+  TC10  Fare audit: the Master Theorem prediction Theta(n) holds
+    [PASS] cost/n stays within 2% over a 729x range of n  (cost/n in [1.0960, 1.1047])
+    [PASS] tripling n multiplies the cost by ~3  (ratio = 3.0003)
+
+  TC11  Fare audit: boundary inputs
+    [PASS] single station: 1 station within band, 1 node visited
+    [PASS] zero-length line: every stretch is entirely inside one band
+    [PASS] every hop exceeds the band cap: no stretch reaches past its first station
+    [PASS] n = 3 hits the base case exactly once
+
+  TC12  Fare audit: the lg-combine really is cheaper than a linear combine
+    [PASS] linear combine costs ~log3(n) times more, as Theta(n lg n) vs Theta(n) predicts  (linear/lg = 9.05x at n = 59049, log3(n) = 10)
+
+  ------------------------------------------------------------
+  TOTAL: 22 passed, 0 failed.
+  ------------------------------------------------------------

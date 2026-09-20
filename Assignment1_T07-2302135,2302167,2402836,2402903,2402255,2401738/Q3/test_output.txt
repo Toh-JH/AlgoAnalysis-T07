@@ -1,0 +1,286 @@
+
+============================================================================
+  CSD3130/CSD3131 Assignment Part 1 - QUESTION 3
+  (a) Sorting stability: the polyclinic triage queue
+  (b) The Omega(n lg n) comparison bound, and beating it with radix sort
+============================================================================
+
+========== PART (a) : STABILITY IN THE POLYCLINIC TRIAGE QUEUE ==========
+
+  Sixteen patients register in arrival order and are then re-ordered by triage
+  tier. Clinically the tier decides who is seen first. Within a tier, the clinic
+  has promised first-come-first-served. Whether that promise survives the sort
+  depends entirely on whether the sorting algorithm is STABLE.
+
+  REGISTRATION ORDER (tier/arrival):
+   P3/#1  P1/#2  P4/#3  P3/#4  P2/#5  P3/#6  P4/#7  P2/#8  P1/#9  P3/#10  P4/#11  P2/#12  P3/#13  P4/#14  P2/#15  P3/#16  
+
+  AFTER MERGE SORT      (stable):
+   P1/#2  P1/#9  P2/#5  P2/#8  P2/#12  P2/#15  P3/#1  P3/#4  P3/#6  P3/#10  P3/#13  P3/#16  P4/#3  P4/#7  P4/#11  P4/#14  
+
+  AFTER INSERTION SORT  (stable):
+   P1/#2  P1/#9  P2/#5  P2/#8  P2/#12  P2/#15  P3/#1  P3/#4  P3/#6  P3/#10  P3/#13  P3/#16  P4/#3  P4/#7  P4/#11  P4/#14  
+
+  AFTER QUICK SORT      (unstable):
+   P1/#2  P1/#9  P2/#12  P2/#8  P2/#5  P2/#15  P3/#16  P3/#10  P3/#13  P3/#6  P3/#4  P3/#1  P4/#3  P4/#14  P4/#7  P4/#11  
+
+  AFTER SELECTION SORT  (unstable):
+   P1/#2  P1/#9  P2/#5  P2/#8  P2/#12  P2/#15  P3/#4  P3/#1  P3/#10  P3/#13  P3/#6  P3/#16  P4/#7  P4/#14  P4/#11  P4/#3  
+
+  Algorithm         Ordered?    Arrival order broken    Comparisons   Stable
+  Merge Sort        yes         0 pair(s)               47            YES
+  Insertion Sort    yes         0 pair(s)               57            YES
+  Quick Sort        yes         7 pair(s)               104           no
+  Selection Sort    yes         4 pair(s)               120           no
+
+  Every one of the four outputs is correctly ordered by tier. Only the
+  stable two keep the queue numbers rising inside each tier. Look at the
+  P2 block below: the unstable sorts serve a later arrival first.
+
+  MERGE SORT (stable) - P2 block is #5, #8, #12, #15 as it should be:
+    Queue   Tier   Arrived   Name
+    Q002    P1     #2        Siti Nurhaliza
+    Q009    P1     #9        Wong Mei Fang
+    Q005    P2     #5        Chan Kok Wai
+    Q008    P2     #8        Muthu Samy
+    Q012    P2     #12       Kavitha Rani
+    Q015    P2     #15       Chua Li Ting
+    Q001    P3     #1        Tan Wei Ming
+    Q004    P3     #4        Lim Hui Ling
+    Q006    P3     #6        Nurul Aisyah
+    Q010    P3     #10       Ahmad Faizal
+    Q013    P3     #13       Teo Seng Huat
+    Q016    P3     #16       Sharifah Aziz
+    Q003    P4     #3        Raj Kumar
+    Q007    P4     #7        Goh Jia Hui
+    Q011    P4     #11       Ong Boon Keng
+    Q014    P4     #14       Yusof Bin Ali
+
+  QUICK SORT (unstable) - the same P2 patients, re-ordered:
+    Queue   Tier   Arrived   Name
+    Q002    P1     #2        Siti Nurhaliza
+    Q009    P1     #9        Wong Mei Fang
+    Q012    P2     #12       Kavitha Rani
+    Q008    P2     #8        Muthu Samy
+    Q005    P2     #5        Chan Kok Wai
+    Q015    P2     #15       Chua Li Ting
+    Q016    P3     #16       Sharifah Aziz
+    Q010    P3     #10       Ahmad Faizal
+    Q013    P3     #13       Teo Seng Huat
+    Q006    P3     #6        Nurul Aisyah
+    Q004    P3     #4        Lim Hui Ling
+    Q001    P3     #1        Tan Wei Ming
+    Q003    P4     #3        Raj Kumar
+    Q014    P4     #14       Yusof Bin Ali
+    Q007    P4     #7        Goh Jia Hui
+    Q011    P4     #11       Ong Boon Keng
+
+===== PART (a) : WHY STABILITY IS WHAT MAKES MULTI-KEY SORTING WORK =====
+
+  Requirement: order the queue by tier, and alphabetically by name inside
+  each tier. The standard technique is two passes over a SINGLE key each:
+      pass 1: sort by the LEAST significant key (name)
+      pass 2: sort by the MOST  significant key (tier)
+  Pass 2 must not disturb the work of pass 1, which requires stability.
+
+  Required order (reference)     : P1:Siti Nurh  P1:Wong Mei   P2:Chan Kok   P2:Chua Li T  P2:Kavitha R  P2:Muthu Sam  P3:Ahmad Fai  P3:Lim Hui L  P3:Nurul Ais  P3:Sharifah   P3:Tan Wei M  P3:Teo Seng   P4:Goh Jia H  P4:Ong Boon   P4:Raj Kumar  P4:Yusof Bin  
+
+  Two stable passes              : P1:Siti Nurh  P1:Wong Mei   P2:Chan Kok   P2:Chua Li T  P2:Kavitha R  P2:Muthu Sam  P3:Ahmad Fai  P3:Lim Hui L  P3:Nurul Ais  P3:Sharifah   P3:Tan Wei M  P3:Teo Seng   P4:Goh Jia H  P4:Ong Boon   P4:Raj Kumar  P4:Yusof Bin  
+
+  Two unstable passes            : P1:Siti Nurh  P1:Wong Mei   P2:Kavitha R  P2:Muthu Sam  P2:Chan Kok   P2:Chua Li T  P3:Sharifah   P3:Tan Wei M  P3:Teo Seng   P3:Nurul Ais  P3:Ahmad Fai  P3:Lim Hui L  P4:Yusof Bin  P4:Goh Jia H  P4:Ong Boon   P4:Raj Kumar  
+
+  Stable pipeline matches the requirement   : YES
+  Unstable pipeline matches the requirement : NO
+
+  The unstable pipeline is not merely untidy - it silently produces the
+  WRONG report, while still looking correctly sorted by tier. This is the
+  same property radix sort depends on in part (b): it is a chain of single-
+  digit passes, and it is correct only because each pass is stable.
+
+===== PART (b) : NO COMPARISON SORT CAN BEAT Omega(n lg n) =====
+
+  A comparison sort only ever asks 'is a < b?'. Its whole execution is a path
+  down a binary decision tree whose leaves are the possible orderings. There are
+  n! orderings, a binary tree of height h holds at most 2^h leaves, so
+        2^h >= n!  =>  h >= lg(n!) = n lg n - n lg e + O(lg n) = Omega(n lg n).
+
+  Below, every one of the n! input permutations is actually sorted and the
+  worst comparison count is recorded. No algorithm dips below the bound.
+
+   n          n!     lower bound      merge sort    insertion sort     selection   bound ok?
+                     ceil(lg n!)           worst             worst         worst
+   2           2               1               1                 1             1         yes
+   3           6               3               3                 3             3         yes
+   4          24               5               5                 6             6         yes
+   5         120               7               8                10            10         yes
+   6         720              10              11                15            15         yes
+   7        5040              13              14                21            21         yes
+   8       40320              16              17                28            28         yes
+
+  THE CONDITION under which the bound holds: the algorithm may learn about the
+  keys ONLY by comparing them pairwise. Nothing is assumed about what a key is.
+  Lift that restriction - allow the algorithm to look INSIDE a key, at its digits
+  - and the decision tree stops being binary, the argument collapses, and linear
+  time becomes possible. That is exactly what radix and counting sort do.
+
+===== PART (b) : LSD RADIX SORT ON COE BIDDING DATA =====
+
+  Twelve bids for a Category A Certificate of Entitlement. Bids are ranked by
+  amount; equal amounts are ranked by submission order, earliest first. That
+  tie-break is only honoured if the sort is stable - and radix sort is stable
+  precisely because its counting-sort subroutine is.
+
+  Submitted (amount / submission #):
+   96001/#1  102500/#2  96001/#3  88000/#4  102500/#5  115300/#6  88000/#7  79990/#8  115300/#9  96001/#10  120000/#11  79990/#12  
+
+  After LSD radix sort, base 10, 6 passes (198 basic operations):
+   79990/#8  79990/#12  88000/#4  88000/#7  96001/#1  96001/#3  96001/#10  102500/#2  102500/#5  115300/#6  115300/#9  120000/#11  
+
+  Ordered by amount           : yes
+  Equal bids keep submission order : yes (STABLE)
+
+  --- WHAT HAPPENS IF THE SUBROUTINE IS NOT STABLE ---
+  One line of counting sort is changed so that equal digits are reversed.
+   96001/#1  96001/#3  96001/#10  88000/#4  88000/#7  79990/#8  79990/#12  120000/#11  115300/#6  115300/#9  102500/#2  102500/#5  
+
+  Correctly ordered by amount : NO
+  Radix sort does not merely lose the tie-break - it stops sorting at all,
+  because each pass relies on the previous passes' order being preserved.
+
+===== PART (b) : IS RADIX SORT REALLY FASTER THAN O(n lg n)? =====
+
+  Keys are COE-style bid amounts in [0, 999999].
+  Radix is run at two radices, because the choice of base is the whole story:
+      base 10  -> d = 6 passes  (human-readable digits, used in the COE demo)
+      base 256 -> d = 3 passes  (what a real implementation would use)
+  Every pass is a full streaming pass over the array, so halving the pass count
+  roughly halves the running time while leaving the complexity Theta(d(n+k)).
+  A Theta(n) algorithm has constant time/n; a Theta(n lg n) one does not.
+
+         n   radix256(ms)   radix10(ms)  std::sort(ms)  mergesort(ms)  radix256 ns/n   std::sort ns/n
+     50000           0.28          3.31           3.49           3.87            5.6             69.7
+    100000           0.52          6.45           6.70           7.84            5.2             67.0
+    200000           1.06         12.80          12.57          17.06            5.3             62.9
+    400000           2.65         25.29          25.48          35.63            6.6             63.7
+    800000           5.25         50.17          55.77          73.92            6.6             69.7
+   1600000          11.36        101.98         114.54         157.70            7.1             71.6
+   3200000          21.18        199.03         235.25         325.34            6.6             73.5
+
+  Radix base 256 is about an order of magnitude faster than std::sort right
+  across the range, and roughly 14x faster than the merge sort.
+
+  BUT READ THE ns/n COLUMNS HONESTLY. std::sort's ns/n does climb, as its lg n
+  factor predicts - but radix's climbs by a similar factor, even though radix is
+  Theta(n) and its ns/n should be flat. The reason is the memory hierarchy: over
+  50k..3.2M the array grows past every level of cache, and radix's scattered
+  writes suffer for it. Meanwhile lg n only rises from 15.6 to 21.6 over that
+  same range - a factor of 1.4 - so the asymptotic gap that SHOULD widen is the
+  same size as the cache effect masking it. Wall-clock timing simply cannot
+  settle this question at these sizes. Menu option 6 settles it by counting
+  operations instead, which no cache can distort.
+
+  The radix10 column is the other caveat. Both radices are Theta(n), yet doubling
+  the pass count from 3 to 6 costs roughly 9x in wall-clock time, leaving base-10
+  radix level with a cache-friendly introsort. Theta(n) is a statement about
+  growth, not a promise of being fastest; the constant hidden in d(n+k) is large
+  and real. The table below finds the point where it stops being worth paying.
+
+  --- THE LIMITATION : RADIX PAYS FOR KEY WIDTH ---
+  Theta(d(n+k)) is linear only while d is small. Widening the key at fixed n
+  adds passes, and radix eventually loses to a comparison sort.
+
+     key range  digits d     radix(ms)   std::sort(ms)        winner
+            99         2         10.97           21.58         radix
+          9999         4         31.36           47.59         radix
+        999999         6         62.10           68.99         radix
+      99999999         8        106.30           71.38     std::sort
+    4294967295        10        162.49           69.98     std::sort
+
+===== PART (b) : THE CACHE-FREE PROOF - COUNTING OPERATIONS =====
+
+  Wall-clock time mixes the algorithm together with the memory hierarchy. Basic
+  operation counts do not, so this is where the asymptotic claim is settled:
+      radix     Theta(d(n+k)) with d,k fixed  =>  ops/n must be CONSTANT
+      mergesort Theta(n lg n)                 =>  cmps/n must GROW like lg n
+
+         n     radix ops       ops/n      merge cmps      cmps/n     cmps/(n lg n)
+     25000        150765      6.0306          334065     13.3626            0.9146
+     50000        300765      6.0153          718141     14.3628            0.9201
+    100000        600765      6.0076         1536590     15.3659            0.9251
+    200000       1200765      6.0038         3272581     16.3629            0.9292
+    400000       2400765      6.0019         6946060     17.3651            0.9331
+    800000       4800765      6.0010        14690442     18.3631            0.9364
+   1600000       9600765      6.0005        30983689     19.3648            0.9396
+   3200000      19200765      6.0002        65164902     20.3640            0.9424
+
+  This is the proof the brief asks for, and it is exact rather than measured:
+    radix ops/n is CONSTANT across a 128-fold increase in n  ->  Theta(n)
+    merge cmps/n GROWS, while cmps/(n lg n) settles          ->  Theta(n lg n)
+  Radix sort therefore performs asymptotically fewer operations than any
+  comparison sort can, which is exactly what the Omega(n lg n) bound forbids a
+  comparison sort from doing - and it is allowed to, because it never compares
+  two keys with each other.
+
+==================== TEST SUITE (Question 3) ====================
+
+  TC01  Merge sort: correct AND stable
+    [PASS] matches std::stable_sort exactly on 200 random queues
+    [PASS] zero arrival-order violations on all 200 queues
+
+  TC02  Quick sort: correct but NOT stable
+    [PASS] output is always correctly ordered by tier
+    [PASS] but arrival order IS broken, so it is unstable  (9531 violations across 200 queues)
+    [PASS] the 16-patient demo queue itself shows the instability  (7 violations)
+
+  TC03  Insertion sort is stable, selection sort is not
+    [PASS] both produce correctly ordered output
+    [PASS] insertion sort: 0 violations (stable)
+    [PASS] selection sort: violations present (unstable)  (2534 violations)
+
+  TC04  Boundary inputs
+    [PASS] empty queue is handled by all four sorts
+    [PASS] single patient is handled
+    [PASS] all keys equal: merge sort leaves the queue untouched
+    [PASS] all keys equal: quick sort still produces a valid ordering
+    [PASS] already sorted and reverse sorted inputs are handled by both
+
+  TC05  Two-pass multi-key sorting needs stability
+    [PASS] stable pipeline reproduces the tier-then-name order every time
+    [PASS] unstable pipeline produces the WRONG report
+
+  TC06  Decision-tree lower bound holds for every sort measured
+    [PASS] merge sort's measured worst case >= ceil(lg n!) for n = 2..8  (n=8: worst 17 >= ceil(lg 8!) = 16)
+    [PASS] ceil(lg n!) grows like n lg n: n=8 bound is 16, n=2 bound is 1
+
+  TC07  Counting sort subroutine: correct and stable
+    [PASS] one digit pass matches std::stable_sort on that digit
+    [PASS] equal digits keep their submission order
+
+  TC08  Radix sort: correct on random, duplicate and boundary data
+    [PASS] matches std::stable_sort on 200 random bid sets (incl. empty)
+    [PASS] radix sort is itself stable
+    [PASS] handles 0 and UINT_MAX together
+    [PASS] 50 identical bids keep their exact submission order
+
+  TC09  Radix sort is only correct because counting sort is stable
+    [PASS] swapping in an unstable subroutine breaks the sort outright
+    [PASS] the stable subroutine sorts the same data correctly
+
+  TC10  Radix sort beats std::sort on fixed-width integer keys
+    [PASS] both radices produce the same sorted output as std::sort
+    [PASS] radix base 256 is faster than the O(n lg n) comparison sort  (radix base 256 (d=3) 38.8 ms vs std::sort 145.6 ms at n = 2,000,000)
+    [PASS] pass count dominates the constant: base 256 beats base 10  (base 10 (d=6) 126.4 ms vs base 256 (d=3) 38.8 ms)
+
+  TC11  Radix sort's cost is Theta(d(n+k)), i.e. linear in n
+    [PASS] radix ops/n is constant to within 1% over a 32x range of n  (radix ops/n in [6.0005, 6.0153])
+    [PASS] merge sort's comparisons/n GROWS over the same range (it is Theta(n lg n))  (merge cmps/n rises 14.36 -> 19.36)
+    [PASS] operation count is proportional to the number of digit passes  (3 passes -> 600027 ops; 9 passes -> 1800081 ops)
+
+  TC12  Quick sort's O(n^2) worst case is real
+    [PASS] already-sorted input drives naive quicksort to exactly n(n-1)/2  (sorted input 4498500 comparisons vs n(n-1)/2 = 4498500; random input 37995)
+    [PASS] random input costs far less, near n lg n
+    [PASS] median-of-three pivoting keeps sorted input at O(n lg n)  (306288 comparisons, n lg n = 285754)
+
+  ------------------------------------------------------------
+  TOTAL: 34 passed, 0 failed.
+  ------------------------------------------------------------

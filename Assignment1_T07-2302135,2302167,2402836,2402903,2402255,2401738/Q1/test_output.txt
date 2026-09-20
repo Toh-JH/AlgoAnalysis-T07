@@ -1,0 +1,257 @@
+
+============================================================================
+  CSD3130/CSD3131 Assignment Part 1 - QUESTION 1
+  Stable Matching for the NEA Hawker Stall Allocation Exercise
+  Gale-Shapley generalised to centre capacities (Hospital-Residents)
+============================================================================
+
+================ DEMO 1 : THE NEA HAWKER STALL EXERCISE ================
+
+--- HAWKER CENTRES (6, total vacant stalls = 12) ---
+ID  Centre                          Town            Stalls    Rent  Footfall  Cuisine gaps
+C0  Old Airport Road Food Centre    Mountbatten          3    1800      4200  Nasi Padang, Dessert
+C1  Chomp Chomp Food Centre         Serangoon            2    1500      3000  BBQ Seafood, Indian
+C2  Maxwell Food Centre             Tanjong Pagar        2    2400      5200  Western, Dessert
+C3  Tekka Centre                    Little India         2    1600      3600  Chinese Zi Char, Dessert
+C4  Ghim Moh Market                 Queenstown           2    1300      2800  Halal Muslim, Noodles
+C5  Bedok Interchange Food Centre   Bedok                1    1700      3900  Vegetarian, Western
+
+--- HAWKER APPLICANTS (18) ---
+ID   Name              Cuisine               Bid  Hygiene  Years
+A00  Tan Wei Ming      Chicken Rice         1500        A     12
+A01  Siti Nurhaliza    Nasi Padang          1400        A      8
+A02  Raj Kumar         Indian               1250        B     15
+A03  Lim Hui Ling      Dessert              1600        A      5
+A04  Chan Kok Wai      Chinese Zi Char      1350        B     20
+A05  Nurul Aisyah      Halal Muslim         1200        A      6
+A06  Goh Jia Hui       Noodles              1450        A      9
+A07  Muthu Samy        Indian               1300        C     18
+A08  Wong Mei Fang     Dessert              1700        A      4
+A09  Ahmad Faizal      BBQ Seafood          1550        B     11
+A10  Ong Boon Keng     Western              1800        A      3
+A11  Kavitha Rani      Vegetarian           1150        B      7
+A12  Teo Seng Huat     Chicken Rice         1250        B     14
+A13  Yusof Bin Ali     Nasi Padang          1300        A     10
+A14  Chua Li Ting      Noodles              1400        A      2
+A15  Sharifah Aziz     Halal Muslim         1350        B     13
+A16  Lee Chee Meng     Chinese Zi Char      1500        A     16
+A17  Devi Lakshmi      Western              1650        C      5
+
+--- APPLICANT PREFERENCE LISTS (best first) ---
+    criteria: 0.50*footfall - 0.30*rent - 0.20*distance-from-home
+  A00 Tan Wei Ming    : C2 C0 C3 C5 C4 C1 
+  A01 Siti Nurhaliza  : C0 C2 C5 C3 C1 C4 
+  A02 Raj Kumar       : C2 C0 C3 C5 C4 C1 
+  A03 Lim Hui Ling    : C2 C0 C3 C4 C5 C1 
+  A04 Chan Kok Wai    : C2 C0 C3 C5 C1 C4 
+  A05 Nurul Aisyah    : C5 C0 C2 C3 C1 C4 
+  A06 Goh Jia Hui     : C2 C0 C3 C4 C5 C1 
+  A07 Muthu Samy      : C2 C0 C3 C5 C4 C1 
+  A08 Wong Mei Fang   : C2 C0 C3 C5 C4 C1 
+  A09 Ahmad Faizal    : C0 C2 C5 C3 C1 C4 
+  A10 Ong Boon Keng   : C2 C0 C3 C5 C4 C1 
+  A11 Kavitha Rani    : C2 C0 C3 C5 C4 C1 
+  A12 Teo Seng Huat   : C5 C0 C2 C3 C1 C4 
+  A13 Yusof Bin Ali   : C0 C2 C5 C3 C1 C4 
+  A14 Chua Li Ting    : C2 C0 C3 C4 C5 C1 
+  A15 Sharifah Aziz   : C5 C0 C2 C3 C1 C4 
+  A16 Lee Chee Meng   : C0 C2 C5 C3 C1 C4 
+  A17 Devi Lakshmi    : C2 C0 C3 C5 C4 C1 
+
+--- CENTRE PREFERENCE LISTS (best first) ---
+    criteria: 0.35*cuisine-gap-fit + 0.30*bid + 0.20*hygiene + 0.15*experience
+  C0 Old Airport Road Food Centre  : A08 A03 A01 A13 A10 A16 A00 A06 A09 A04 A14 A15 A17 A02 A12 A05 A07 A11 
+  C1 Chomp Chomp Food Centre       : A09 A02 A10 A07 A16 A08 A00 A03 A06 A01 A04 A13 A14 A15 A17 A12 A05 A11 
+  C2 Maxwell Food Centre           : A10 A08 A03 A17 A16 A00 A06 A09 A01 A04 A13 A14 A15 A02 A12 A05 A07 A11 
+  C3 Tekka Centre                  : A16 A08 A03 A04 A10 A00 A06 A09 A01 A13 A14 A15 A17 A02 A12 A05 A07 A11 
+  C4 Ghim Moh Market               : A06 A14 A15 A10 A05 A16 A08 A00 A03 A09 A01 A04 A13 A17 A02 A12 A07 A11 
+  C5 Bedok Interchange Food Centre : A10 A17 A16 A08 A00 A03 A11 A06 A09 A01 A04 A13 A14 A15 A02 A12 A05 A07 
+
+================ DEMO 2 : GALE-SHAPLEY WITH CAPACITIES ================
+
+--- PROPOSAL TRACE (applicant-proposing) ---
+    A00 proposes to C2  -> accepted (stall 1/2)
+    A01 proposes to C0  -> accepted (stall 1/3)
+    A02 proposes to C2  -> accepted (stall 2/2)
+    A03 proposes to C2  -> accepted, evicts A02
+    A02 proposes to C0  -> accepted (stall 2/3)
+    A04 proposes to C2  -> rejected (full, all holders rank better)
+    A04 proposes to C0  -> accepted (stall 3/3)
+    A05 proposes to C5  -> accepted (stall 1/1)
+    A06 proposes to C2  -> rejected (full, all holders rank better)
+    A06 proposes to C0  -> accepted, evicts A02
+    A02 proposes to C3  -> accepted (stall 1/2)
+    A07 proposes to C2  -> rejected (full, all holders rank better)
+    A07 proposes to C0  -> rejected (full, all holders rank better)
+    A07 proposes to C3  -> accepted (stall 2/2)
+    A08 proposes to C2  -> accepted, evicts A00
+    A00 proposes to C0  -> accepted, evicts A04
+    A04 proposes to C3  -> accepted, evicts A07
+    A07 proposes to C5  -> rejected (full, all holders rank better)
+    A07 proposes to C4  -> accepted (stall 1/2)
+    A09 proposes to C0  -> rejected (full, all holders rank better)
+    A09 proposes to C2  -> rejected (full, all holders rank better)
+    A09 proposes to C5  -> accepted, evicts A05
+    A05 proposes to C0  -> rejected (full, all holders rank better)
+    A05 proposes to C2  -> rejected (full, all holders rank better)
+    A05 proposes to C3  -> rejected (full, all holders rank better)
+    A05 proposes to C1  -> accepted (stall 1/2)
+    A10 proposes to C2  -> accepted, evicts A03
+    A03 proposes to C0  -> accepted, evicts A06
+    A06 proposes to C3  -> accepted, evicts A02
+    A02 proposes to C5  -> rejected (full, all holders rank better)
+    A02 proposes to C4  -> accepted (stall 2/2)
+    A11 proposes to C2  -> rejected (full, all holders rank better)
+    A11 proposes to C0  -> rejected (full, all holders rank better)
+    A11 proposes to C3  -> rejected (full, all holders rank better)
+    A11 proposes to C5  -> accepted, evicts A09
+    A09 proposes to C3  -> rejected (full, all holders rank better)
+    A09 proposes to C1  -> accepted (stall 2/2)
+    A12 proposes to C5  -> rejected (full, all holders rank better)
+    A12 proposes to C0  -> rejected (full, all holders rank better)
+    A12 proposes to C2  -> rejected (full, all holders rank better)
+    ... trace truncated after 40 events ...
+
+--- FINAL STALL ALLOCATION ---
+  C0 Old Airport Road Food Centre    [3/3] A03:Lim Hui Ling(Dessert)  A01:Siti Nurhaliza(Nasi Padang)  A13:Yusof Bin Ali(Nasi Padang)  
+  C1 Chomp Chomp Food Centre         [2/2] A09:Ahmad Faizal(BBQ Seafood)  A02:Raj Kumar(Indian)  
+  C2 Maxwell Food Centre             [2/2] A10:Ong Boon Keng(Western)  A08:Wong Mei Fang(Dessert)  
+  C3 Tekka Centre                    [2/2] A16:Lee Chee Meng(Chinese Zi Char)  A04:Chan Kok Wai(Chinese Zi Char)  
+  C4 Ghim Moh Market                 [2/2] A06:Goh Jia Hui(Noodles)  A14:Chua Li Ting(Noodles)  
+  C5 Bedok Interchange Food Centre   [1/1] A17:Devi Lakshmi(Western)  
+  Unplaced applicants: A00 A05 A07 A11 A12 A15 
+  Placed 12 of 18 applicants into 12 stalls; 6 unplaced.
+  Proposals made = 72, rank comparisons = 60, time = 0.030 ms
+
+--- STABILITY AUDIT (brute force over all 108 applicant-centre pairs) ---
+  Type-1 instability: applicant unplaced, yet a centre prefers it to a hire.
+  Type-2 instability: applicant and centre would both rather swap.
+  Blocking pairs found: 0   ==> THE ALLOCATION IS STABLE.
+  Average preference position obtained by a placed applicant: 3.000
+
+========= DEMO 3 : WHO PROPOSES MATTERS (applicant vs centre) =========
+
+--- APPLICANT-PROPOSING (applicant-optimal) ---
+  C0 Old Airport Road Food Centre    [3/3] A03:Lim Hui Ling(Dessert)  A01:Siti Nurhaliza(Nasi Padang)  A13:Yusof Bin Ali(Nasi Padang)  
+  C1 Chomp Chomp Food Centre         [2/2] A09:Ahmad Faizal(BBQ Seafood)  A02:Raj Kumar(Indian)  
+  C2 Maxwell Food Centre             [2/2] A10:Ong Boon Keng(Western)  A08:Wong Mei Fang(Dessert)  
+  C3 Tekka Centre                    [2/2] A16:Lee Chee Meng(Chinese Zi Char)  A04:Chan Kok Wai(Chinese Zi Char)  
+  C4 Ghim Moh Market                 [2/2] A06:Goh Jia Hui(Noodles)  A14:Chua Li Ting(Noodles)  
+  C5 Bedok Interchange Food Centre   [1/1] A17:Devi Lakshmi(Western)  
+  Unplaced applicants: A00 A05 A07 A11 A12 A15 
+  Placed 12 of 18 applicants into 12 stalls; 6 unplaced.
+  Proposals made = 72, rank comparisons = 60, time = 0.002 ms
+
+--- CENTRE-PROPOSING   (centre-optimal) ---
+  C0 Old Airport Road Food Centre    [3/3] A03:Lim Hui Ling(Dessert)  A01:Siti Nurhaliza(Nasi Padang)  A13:Yusof Bin Ali(Nasi Padang)  
+  C1 Chomp Chomp Food Centre         [2/2] A09:Ahmad Faizal(BBQ Seafood)  A02:Raj Kumar(Indian)  
+  C2 Maxwell Food Centre             [2/2] A10:Ong Boon Keng(Western)  A08:Wong Mei Fang(Dessert)  
+  C3 Tekka Centre                    [2/2] A16:Lee Chee Meng(Chinese Zi Char)  A04:Chan Kok Wai(Chinese Zi Char)  
+  C4 Ghim Moh Market                 [2/2] A06:Goh Jia Hui(Noodles)  A14:Chua Li Ting(Noodles)  
+  C5 Bedok Interchange Food Centre   [1/1] A17:Devi Lakshmi(Western)  
+  Unplaced applicants: A00 A05 A07 A11 A12 A15 
+  Placed 12 of 18 applicants into 12 stalls; 6 unplaced.
+  Proposals made = 16, rank comparisons = 4, time = 0.004 ms
+
+  Blocking pairs, applicant-proposing : 0
+  Blocking pairs, centre-proposing    : 0
+  Mean applicant preference position, applicant-proposing : 3.000  (1.000 = everyone got 1st choice)
+  Mean applicant preference position, centre-proposing    : 3.000
+
+  The two runs returned THE SAME allocation. That is not a coincidence and it
+  is a genuinely useful finding: the applicant-optimal and the centre-optimal
+  stable matchings are the extreme points of the lattice of stable matchings,
+  so when they coincide the instance has EXACTLY ONE stable matching. Our
+  criteria-derived preferences are strongly correlated (nearly every hawker
+  ranks the high-footfall Maxwell and Old Airport Road first), and correlated
+  preferences collapse the lattice to a single point.
+  A data set therefore has to be built deliberately to show the proposer's
+  advantage - which is what the next exercise does.
+
+  --- SMALLEST EXERCISE THAT EXPOSES THE PROPOSER'S ADVANTAGE ---
+  Three hawkers, three single-stall centres, cyclic preferences:
+    Kamala  : Adam > Amoy > Zion       Adam : Ng     > Hafiz  > Kamala
+    Ng      : Amoy > Zion > Adam       Amoy : Hafiz  > Kamala > Ng
+    Hafiz   : Zion > Adam > Amoy       Zion : Kamala > Ng     > Hafiz
+    Kamala Devi    hawker-proposing -> Adam Road FC         centre-proposing -> Zion Riverside FC
+    Ng Ah Huat     hawker-proposing -> Amoy Street FC       centre-proposing -> Adam Road FC
+    Hafiz Rahman   hawker-proposing -> Zion Riverside FC    centre-proposing -> Amoy Street FC
+    Mean preference position: hawker-proposing 1.000 (every hawker gets its 1st choice)
+                              centre-proposing 3.000 (every hawker gets its LAST choice)
+    Both allocations are stable: blocking pairs = 0 and 0.
+  => the proposing side is never worse off. If hawker welfare is the
+     objective, the NEA should run the exercise hawker-proposing.
+
+==================== TEST SUITE (Question 1) ====================
+
+  TC01  Default NEA exercise: structurally valid allocation
+    [PASS] no applicant holds 2 stalls, no centre exceeds quota
+    [PASS] all 12 stalls filled (complete lists + surplus of applicants)  (12 of 12)
+
+  TC02  Default NEA exercise: zero blocking pairs
+    [PASS] brute-force audit of all 108 pairs finds no instability  (0 blocking pairs)
+
+  TC03  Minimum specification: 5 centres x 5 applicants
+    [PASS] valid
+    [PASS] stable
+    [PASS] every applicant placed (5 applicants, 5 unit-quota centres)  (5)
+
+  TC04  Identical applicant preference lists (maximum contention)
+    [PASS] valid
+    [PASS] stable
+    [PASS] all 12 stalls still filled  (12/12)
+
+  TC05  Identical centre rankings: the globally top applicants win
+    [PASS] stable
+    [PASS] exactly the top-10 applicants of the common ranking are placed
+
+  TC06  All quotas = 1 agrees with classic 1-to-1 Gale-Shapley
+    [PASS] capacitated version == classic version on 50 random 12x12 instances
+
+  TC07  Surplus of applicants: exactly n - stalls go unplaced
+    [PASS] unplaced count == 18 - 12 == 6  (6)
+    [PASS] no unplaced applicant forms a Type-1 blocking pair
+
+  TC08  Single centre, quota 4: hires exactly its 4 best-ranked applicants
+    [PASS] hired set == top 4 of the centre's preference list
+    [PASS] stable
+
+  TC09  Applicant-optimality on the classic 3x3 instance
+    [PASS] brute force finds 3 stable matchings for this instance  (3 found)
+    [PASS] GS result gives EVERY applicant its best achievable centre
+    [PASS] GS result is itself one of the stable matchings
+
+  TC10  Centre-proposing variant is stable but worse for applicants
+    [PASS] centre-proposing result is valid
+    [PASS] centre-proposing result is stable
+    [PASS] applicants do no worse when they propose  (applicant-proposing 3.000 vs centre-proposing 3.000)
+    [PASS] cyclic instance: hawker-proposing is STRICTLY better for hawkers  (hawker-proposing 1.000 vs centre-proposing 3.000)
+    [PASS] cyclic instance: the centre-proposing result is still stable
+    [PASS] derived data set has a unique stable matching (the two optima coincide)
+
+  TC11  Incomplete preference lists (each applicant shortlists 3 of 8)
+    [PASS] nobody is ever placed at a centre outside their shortlist
+    [PASS] still stable on 30 random shortlisted instances (stalls may stay empty)
+
+  TC12  Optimised O(nm) version vs O(nmq) reference oracle
+    [PASS] both implementations agree on 200 random instances
+    [PASS] 2000 applicants x 200 centres: valid
+    [PASS] 2000 applicants x 200 centres: stable
+    [PASS] solved well inside the O(n*m) proposal bound  (244093 proposals in 2.074 ms; n*m = 400000)
+
+  ------------------------------------------------------------
+  TOTAL: 31 passed, 0 failed.
+  ------------------------------------------------------------
+
+================ SCALABILITY : IS IT REALLY O(n*m)? ================
+  m is held at n/10, quotas in [1,10], complete preference lists.
+
+       n      m         n*m     proposals  proposals/nm    time(ms)   time/nm(us)
+     500     50       25000         16967        0.6787       0.140        0.0056
+    1000    100      100000         67878        0.6788       0.526        0.0053
+    2000    200      400000        273105        0.6828       2.046        0.0051
+    4000    400     1600000       1089005        0.6806      11.252        0.0070
+    8000    800     6400000       4399953        0.6875      71.863        0.0112
+
+  proposals/nm stays bounded by 1: every applicant proposes to every
+  centre at most once, which is the O(n*m) worst case of the algorithm.
