@@ -1,0 +1,12 @@
+name,seams,total_ms,total_seam_energy
+03_dp,144,144.096,1297838
+03_greedy,144,64.1267,2949098
+03_dp_forward,144,189.402,60139
+03_dp_gradient,144,117.229,427878
+05_small_dp,48,3.5706,255860
+05_small_greedy,48,0.9055,560392
+05_small_graphcut_dinic,48,3760.06,255608
+05_small_graphcut_ek,48,16346.6,255608
+06_shrink_both_70x80,208,135.076,1851838
+06_shrink_both_alternate,208,170.881,1882670
+07_enlarge_130pct,144,90.7814,1297838

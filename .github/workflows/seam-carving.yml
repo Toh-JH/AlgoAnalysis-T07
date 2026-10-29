@@ -1,0 +1,117 @@
+# =====================================================================================
+#  Assignment 2 - Seam Carving : CI / CD   (bonus item 7c)
+#
+#  CI  on every push / pull request that touches the Assignment 2 code:
+#        - build with MSVC (Windows, incl. the GUI) and GCC (Ubuntu)
+#        - run the 100+ test correctness suite and a CLI smoke test (ctest)
+#        - run the quick benchmark and the demo figure generator
+#        - upload the binaries, figures and CSV files as build artifacts
+#  CD  when a tag like  a2-v1.0  is pushed:
+#        - package the Windows binaries + README into a zip
+#        - publish it as a GitHub Release
+# =====================================================================================
+name: seam-carving
+
+on:
+  push:
+    branches: ["**"]
+    paths: ["Assignment2_*/SeamCarving/**", ".github/workflows/seam-carving.yml"]
+    tags: ["a2-v*"]          # path filters are not applied to tag pushes
+  pull_request:
+    paths: ["Assignment2_*/SeamCarving/**", ".github/workflows/seam-carving.yml"]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build-test:
+    name: build + test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest]
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+
+      # The folder name contains the team's student IDs; find it instead of hard-coding it.
+      - name: Locate project
+        id: loc
+        run: echo "dir=$(ls -d Assignment2_*/SeamCarving | head -n 1)" >> "$GITHUB_OUTPUT"
+
+      - name: Configure
+        working-directory: ${{ steps.loc.outputs.dir }}
+        run: cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+
+      - name: Build
+        working-directory: ${{ steps.loc.outputs.dir }}
+        run: cmake --build build --config Release --parallel
+
+      - name: Test (correctness suite + CLI smoke test)
+        working-directory: ${{ steps.loc.outputs.dir }}
+        run: ctest --test-dir build -C Release --output-on-failure
+
+      - name: Full test transcript
+        working-directory: ${{ steps.loc.outputs.dir }}
+        run: |
+          BIN=build; [ -d build/Release ] && BIN=build/Release
+          mkdir -p ci_out
+          "$BIN/seamcarve_tests" | tee ci_out/test_output.txt
+
+      - name: Quick benchmark + demo figures
+        working-directory: ${{ steps.loc.outputs.dir }}
+        run: |
+          BIN=build; [ -d build/Release ] && BIN=build/Release
+          "$BIN/seamcarve_bench" ci_out/benchmark --quick | tee ci_out/benchmark.txt
+          "$BIN/seamcarve" --demo ci_out/demo --quick
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: seam-carving-${{ matrix.os }}
+          path: |
+            ${{ steps.loc.outputs.dir }}/ci_out
+            ${{ steps.loc.outputs.dir }}/build/Release/*.exe
+            ${{ steps.loc.outputs.dir }}/build/seamcarve
+            ${{ steps.loc.outputs.dir }}/build/seamcarve_tests
+            ${{ steps.loc.outputs.dir }}/build/seamcarve_bench
+          if-no-files-found: warn
+
+  release:
+    name: release (Windows binaries)
+    if: startsWith(github.ref, 'refs/tags/a2-v')
+    needs: build-test
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+      - name: Locate project
+        id: loc
+        run: echo "dir=$(ls -d Assignment2_*/SeamCarving | head -n 1)" >> "$GITHUB_OUTPUT"
+      - name: Build
+        working-directory: ${{ steps.loc.outputs.dir }}
+        run: |
+          cmake -S . -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --config Release --parallel
+      - name: Package
+        working-directory: ${{ steps.loc.outputs.dir }}
+        run: |
+          mkdir -p dist/SeamCarving
+          cp build/Release/*.exe README.md dist/SeamCarving/
+          cd dist && 7z a "SeamCarving-${GITHUB_REF_NAME}-windows.zip" SeamCarving
+      - name: Publish GitHub Release
+        working-directory: ${{ steps.loc.outputs.dir }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "$GITHUB_REF_NAME" "dist/SeamCarving-${GITHUB_REF_NAME}-windows.zip" \
+            --title "Seam Carving $GITHUB_REF_NAME" \
+            --notes "Windows build of the CSD3130 Assignment 2 seam-carving app (GUI, CLI, tests, benchmark). Built and tested by CI."

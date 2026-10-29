@@ -1,0 +1,133 @@
+Seam carving - correctness suite
+
+== Image I/O and helpers ==
+    [PASS] BMP round trip is lossless
+    [PASS] PPM round trip is lossless
+    [PASS] PNG round trip is lossless (WIC)
+    [PASS] transpose(transpose(I)) == I
+    [PASS] transpose swaps dimensions
+    [PASS] loading a missing file throws
+
+== Energy maps (item 1a) ==
+    [PASS] constant image has zero energy everywhere (both kinds)
+    [PASS] gradient energy of ramp = [300, 600, 300]
+    [PASS] Sobel energy of ramp    = [1200, 2400, 1200]
+    [PASS] energy(transpose I) == transpose(energy I)  [gradient]
+    [PASS] 4-thread energy == 1-thread energy  [gradient]
+    [PASS] pixelEnergy agrees with the full map  [gradient]
+    [PASS] energy(transpose I) == transpose(energy I)  [sobel]
+    [PASS] 4-thread energy == 1-thread energy  [sobel]
+    [PASS] pixelEnergy agrees with the full map  [sobel]
+
+== Incremental energy update after seam removal (item 5d improvement) ==
+    [PASS] 30 removals: incremental == full recompute  [gradient]
+    [PASS] 30 removals: incremental == full recompute  [sobel]
+
+== Convolution methods agree (item 2b) ==
+    [PASS] separable Sobel == direct Sobel
+    [PASS] k=3: divide&conquer (leaf 8) == direct
+    [PASS] k=3: parallel divide&conquer == direct
+    [PASS] k=3: FFT == direct (to 1e-6)  (max error 3.12639e-13)
+    [PASS] k=5: divide&conquer (leaf 8) == direct
+    [PASS] k=5: parallel divide&conquer == direct
+    [PASS] k=5: FFT == direct (to 1e-6)  (max error 7.95808e-13)
+    [PASS] k=7: divide&conquer (leaf 8) == direct
+    [PASS] k=7: parallel divide&conquer == direct
+    [PASS] k=7: FFT == direct (to 1e-6)  (max error 1.64846e-12)
+    [PASS] k=11: divide&conquer (leaf 8) == direct
+    [PASS] k=11: parallel divide&conquer == direct
+    [PASS] k=11: FFT == direct (to 1e-6)  (max error 2.50111e-12)
+
+== DP is optimal: exhaustive comparison with brute force (item 1b / 2a) ==
+    [PASS] DP cost == brute-force minimum on every grid up to 7x6  (168 grids, 41588 seams enumerated)
+    [PASS] counting DP == number of seams enumerated
+
+== DP variants return the same seam ==
+    [PASS] full table == compact == 4-thread parallel (40 random maps, ties included)
+    [PASS] native horizontal DP == vertical DP on the transpose
+    [PASS] compact table uses < 1/7 of the full table's memory (500x400)  (1600000 B vs 208000 B)
+
+== Greedy (item 3) ==
+    [PASS] greedy seams are valid and their cost is reported correctly
+    [PASS] greedy cost >= DP cost, best-start greedy in between (200 maps)
+    [PASS] greedy is strictly worse than DP on most random maps  (166/200 maps)
+    [PASS] trap example: greedy 201, DP 15  (greedy 201 vs DP 15)
+
+== Max-flow on a textbook network (CLRS Fig. 26.1, max flow 23) ==
+    [PASS] edmonds-karp finds flow 23
+    [PASS] edmonds-karp min cut S = {s, v1, v2, v4}
+    [PASS] dinic finds flow 23
+    [PASS] dinic min cut S = {s, v1, v2, v4}
+
+== Graph-cut seams are optimal: cost == DP cost (item 4) ==
+    [PASS] edmonds-karp: seam valid and cost == DP  (150 random maps, 1x1 .. 25x20)
+    [PASS] edmonds-karp: max-flow value == cut capacity == seam cost
+    [PASS] dinic: seam valid and cost == DP  (150 random maps, 1x1 .. 25x20)
+    [PASS] dinic: max-flow value == cut capacity == seam cost
+    [PASS] cheap seam in the LAST column: our construction finds it (cost 0)  (ours 0, brief's 36, DP 0)
+    [PASS] ...the brief's INF-sink construction cannot (documented deviation)
+
+== Forward-energy DP is optimal for its cost function ==
+    [PASS] forward DP == brute-force minimum forward cost (all grids up to 6x5)
+
+== Number of seams grows exponentially (item 2a(i)) ==
+    [PASS] n = 2: exactly 2^m seams (every row picks either column)
+    [PASS] n >= 2: at least 2^m seams, m = 1..40
+    [PASS] upper bound n * 3^(m-1) holds
+
+== Seam removal and the resize loop (item 1c) ==
+    [PASS] removal keeps every other pixel, in order
+    [PASS] removing from a 1-pixel-wide image throws
+    [PASS] dp: 96x64 -> 70x64
+    [PASS] dp: 96x64 -> 96x50
+    [PASS] dp: 96x64 -> 60x40
+    [PASS] dp: 96x64 -> 130x64
+    [PASS] dp: 96x64 -> 96x90
+    [PASS] dp: 96x64 -> 80x80
+    [PASS] dp: 96x64 -> 96x64
+    [PASS] greedy: 96x64 -> 70x64
+    [PASS] greedy: 96x64 -> 96x50
+    [PASS] greedy: 96x64 -> 60x40
+    [PASS] greedy: 96x64 -> 130x64
+    [PASS] greedy: 96x64 -> 96x90
+    [PASS] greedy: 96x64 -> 80x80
+    [PASS] greedy: 96x64 -> 96x64
+    [PASS] graphcut: 96x64 -> 70x64
+    [PASS] graphcut: 96x64 -> 96x50
+    [PASS] graphcut: 96x64 -> 130x64
+    [PASS] graphcut: 96x64 -> 96x90
+    [PASS] graphcut: 96x64 -> 80x80
+    [PASS] graphcut: 96x64 -> 96x64
+    [PASS] order width-first reaches 70x45
+    [PASS] order height-first reaches 70x45
+    [PASS] order alternate reaches 70x45
+    [PASS] forward energy carve reaches 70x50
+    [PASS] incremental and full energy give identical carved images
+    [PASS] 4-thread carve == 1-thread carve
+    [PASS] deterministic: same input, same output
+    [PASS] horizontal seams == vertical seams of the transpose
+
+== Seam history, overlays and the multi-size map ==
+    [PASS] 30 seams recorded (20 vertical + 10 horizontal)
+    [PASS] no original pixel is removed twice
+    [PASS] vertical seams have 50 pixels, horizontal ones 60 (width after vertical pass)
+    [PASS] removed + remaining pixels == all original pixels
+    [PASS] multi-size map == sequential carving for k = 0, 1, 7, 25, 40
+    [PASS] multi-size map enlargement == seam insertion for k = 1, 10, 40
+    [PASS] rendering outside the precomputed range throws
+    [PASS] DP seams avoid the towers (hit them at < half the rate of uniform removal)  (8.15104% of removed pixels, towers are 28% of the width)
+
+== Edge cases ==
+    [PASS] 1x1 -> 1x1 is a no-op
+    [PASS] single-row image: each seam is one pixel, 9 -> 4
+    [PASS] single-column image: 1x9 -> 1x3 with horizontal seams
+    [PASS] 1-wide image enlarged to 5 wide
+    [PASS] carve down to 1x1
+    [PASS] enlarge 10x8 -> 35x20 (several insertion passes)
+    [PASS] target 0 is rejected
+    [PASS] forward energy with greedy is rejected
+    [PASS] graph cut on a 1-column map picks column 0
+    [PASS] empty image is rejected
+
+== SUMMARY ==
+    101 passed, 0 failed
