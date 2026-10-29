@@ -8,6 +8,7 @@
  *    - all DP variants (full / compact / parallel / native horizontal) give one seam
  *    - incremental energy update must equal a full recomputation after every removal
  *    - the multi-size map must reproduce sequential carving pixel-for-pixel
+ *    - protected pixels are never removed, and auto size stops exactly at the mask
  *
  *  RUN   tests.exe            all tests, prints [PASS]/[FAIL] lines and a summary
  * ===================================================================================== */
@@ -424,6 +425,81 @@ static void testEdgeCases() {
     check("empty image is rejected", throws([&] { SeamCarver c(Image(), o); }));
 }
 
+static void testProtectionAndAutoSize() {
+    section("Object protection and automatic size");
+    check("penalty exceeds any unprotected seam up to 20,000 pixels long (6120 x 20000 < 2^27)",
+          6120LL * 20000 < static_cast<long long>(kProtectPenalty));
+
+    /* 1. protected pixels are never removed by the optimal finders */
+    std::mt19937 rng(21);
+    struct Cfg { const char* name; Algorithm a; bool fwd; };
+    for (Cfg cfg : {Cfg{"dp", Algorithm::DP, false}, Cfg{"dp forward", Algorithm::DP, true},
+                    Cfg{"graphcut", Algorithm::GraphCut, false}}) {
+        bool ok = true;
+        for (int rep = 0; rep < 6 && ok; ++rep) {
+            Image img = makeRandomImage(40, 30, 100 + rep);
+            ProtectMask m(40, 30, 0);
+            int x0 = 5 + static_cast<int>(rng() % 20), y0 = 3 + static_cast<int>(rng() % 15);
+            for (int y = y0; y < y0 + 10; ++y) for (int x = x0; x < x0 + 10; ++x) m.at(x, y) = 1;
+            CarveOptions o; o.algo = cfg.a; o.forwardEnergy = cfg.fwd;
+            std::vector<SeamRecord> seams;
+            carveTo(img, 25, 22, o, nullptr, nullptr, &seams, &m);       /* 15 vertical + 8 horizontal */
+            for (const SeamRecord& s : seams) for (int L : s.pixels) ok &= m.d[static_cast<size_t>(L)] == 0;
+        }
+        check(std::string(cfg.name) + ": no protected pixel removed (6 images, 23 seams each)", ok);
+    }
+
+    /* 2. incremental and full energy agree with a mask (the penalty is re-applied in the band) */
+    Image img = makeTowerScene(96, 64);
+    ProtectMask tm(96, 64, 0);
+    for (int y = 10; y < 50; ++y) for (int x = 20; x < 35; ++x) tm.at(x, y) = 1;
+    CarveOptions inc, full; full.incrementalEnergy = false;
+    check("masked carve: incremental energy == full recompute",
+          carveTo(img, 70, 50, inc, nullptr, nullptr, nullptr, &tm) == carveTo(img, 70, 50, full, nullptr, nullptr, nullptr, &tm));
+    check("enlarging with a mask reaches the target", [&] { Image e = carveTo(img, 120, 80, inc, nullptr, nullptr, nullptr, &tm); return e.w == 120 && e.h == 80; }());
+    check("mask of the wrong size is rejected", throws([&] { ProtectMask bad(10, 10, 1); SeamCarver c(img, inc, &bad); }));
+    Image mi(3, 1); mi.set(0, 0, {0, 0, 0}); mi.set(1, 0, {200, 200, 200}); mi.set(2, 0, {100, 100, 100});
+    check("maskFromImage: brighter than mid-grey = protected", maskFromImage(mi).d == std::vector<uint8_t>{0, 1, 0});
+
+    /* 3. auto size stops EXACTLY where the mask blocks every seam */
+    Image r40 = makeRandomImage(40, 20, 31);
+    ProtectMask stripe(40, 20, 0);
+    for (int y = 0; y < 20; ++y) for (int x = 15; x < 25; ++x) stripe.at(x, y) = 1;   /* full-height, 10 wide */
+    AutoSizeParams onlyMask; onlyMask.minFraction = 0; onlyMask.jump = 1e9; onlyMask.minRise = 1e18;
+    AutoSizeResult a = autoSize(r40, CarveOptions{}, &stripe, onlyMask);
+    std::ostringstream d1; d1 << "width " << a.width << " (" << stopReasonText(a.widthReason) << "), height " << a.height;
+    check("full-height protected stripe 10 px wide: auto width = 10 exactly", a.width == 10 && a.widthReason == StopReason::Protected, d1.str());
+    check("...and no horizontal seam can avoid it: height unchanged", a.height == 20 && a.heightReason == StopReason::Protected);
+
+    /* 4. the cost-jump rule finds where cheap content runs out */
+    Image sky(60, 40);
+    for (int y = 0; y < 40; ++y)
+        for (int x = 0; x < 60; ++x) {
+            uint8_t v = static_cast<uint8_t>(rng() & 0xFF);
+            sky.set(x, y, y < 12 ? RGB{120, 170, 230} : RGB{v, static_cast<uint8_t>(v / 2), static_cast<uint8_t>(255 - v)});
+        }
+    AutoSizeParams heightOnly; heightOnly.width = false; heightOnly.minFraction = 0.0;
+    AutoSizeResult k = autoSize(sky, CarveOptions{}, nullptr, heightOnly);
+    std::ostringstream d2; d2 << "auto height " << k.height << ", expected about 28 (" << stopReasonText(k.heightReason) << ")";
+    check("12 flat sky rows over noise: auto height = 28 +/- 2 by cost jump",
+          std::abs(k.height - 28) <= 2 && k.heightReason == StopReason::CostJump, d2.str());
+
+    /* 5. the floor is respected, and Auto + carveTo reproduce the analysed seams */
+    AutoSizeParams floor70; floor70.minFraction = 0.7;
+    AutoSizeResult f = autoSize(makeRandomImage(50, 40, 41), CarveOptions{}, nullptr, floor70);
+    check("auto size never goes below the 70% floor", f.width >= 35 && f.height >= 28);
+    AutoSizeResult t = autoSize(img, CarveOptions{}, &tm);
+    std::vector<SeamRecord> ts;
+    carveTo(img, t.width, t.height, CarveOptions{}, nullptr, nullptr, &ts, &tm);
+    bool clean = true;
+    for (const SeamRecord& s : ts) for (int L : s.pixels) clean &= tm.d[static_cast<size_t>(L)] == 0;
+    std::ostringstream d3; d3 << "96x64 -> " << t.width << "x" << t.height;
+    check("tower scene with a mask: carving to the auto size removes no protected pixel", clean, d3.str());
+    CarveOptions gc; gc.algo = Algorithm::GraphCut;
+    AutoSizeResult tg = autoSize(img, gc, &tm);
+    check("graph cut auto size (analysed with DP) == DP auto size", tg.width == t.width && tg.height == t.height);
+}
+
 int main() {
     std::cout << "Seam carving - correctness suite\n";
     testImageIO();
@@ -439,6 +515,7 @@ int main() {
     testSeamCounting();
     testRemovalAndCarver();
     testHistoryAndMaps();
+    testProtectionAndAutoSize();
     testEdgeCases();
     std::cout << "\n== SUMMARY ==\n    " << g_pass << " passed, " << g_fail << " failed\n";
     return g_fail == 0 ? 0 : 1;

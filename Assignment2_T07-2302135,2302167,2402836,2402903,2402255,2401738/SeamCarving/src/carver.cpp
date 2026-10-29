@@ -6,6 +6,7 @@
 #include <algorithm>
 #include <chrono>
 #include <climits>
+#include <cmath>
 
 namespace sc {
 
@@ -34,20 +35,46 @@ static double msSince(Clock::time_point t0) {
  *  SeamCarver                                                                          *
  * ==================================================================================== */
 
-SeamCarver::SeamCarver(const Image& img, const CarveOptions& opt)
+ProtectMask maskFromImage(const Image& maskImg) {
+    ProtectMask m(maskImg.w, maskImg.h);
+    Grid<uint8_t> g = toGray(maskImg);
+    for (size_t i = 0; i < m.d.size(); ++i) m.d[i] = g.d[i] > 127 ? 1 : 0;
+    return m;
+}
+
+SeamCarver::SeamCarver(const Image& img, const CarveOptions& opt, const ProtectMask* mask)
     : opt_(opt), img_(img), origin_(img.w, img.h), W0_(img.w), H0_(img.h) {
     if (img.empty()) throw std::invalid_argument("empty image");
     if (opt.forwardEnergy && opt.algo != Algorithm::DP)
         throw std::invalid_argument("forward energy is a DP formulation: use --algo dp");
+    if (mask && !mask->empty()) {
+        if (mask->w != img.w || mask->h != img.h) throw std::invalid_argument("protect mask size differs from the image");
+        if (std::any_of(mask->d.begin(), mask->d.end(), [](uint8_t v) { return v != 0; })) mask_ = *mask;
+    }
     for (size_t i = 0; i < origin_.d.size(); ++i) origin_.d[i] = static_cast<int32_t>(i);
     recomputeEnergy();
+}
+
+/* Protected pixels of row y, columns [x0, x1], get kProtectPenalty on top of their energy. */
+void SeamCarver::addPenalty(int y, int x0, int x1) {
+    const uint8_t* m = mask_.row(y);
+    int32_t*       e = energy_.row(y);
+    for (int x = x0; x <= x1; ++x) if (m[x]) e[x] += kProtectPenalty;
 }
 
 void SeamCarver::recomputeEnergy() {
     auto t0 = Clock::now();
     if (opt_.forwardEnergy) gray_ = toGray(img_);
-    else                    energy_ = computeEnergy(img_, opt_.energy, opt_.threads);
+    else {
+        energy_ = computeEnergy(img_, opt_.energy, opt_.threads);
+        if (!mask_.empty()) for (int y = 0; y < img_.h; ++y) addPenalty(y, 0, img_.w - 1);
+    }
     stats_.energyMs += msSince(t0);
+}
+
+ProtectMask SeamCarver::protectMask() const {
+    if (mask_.empty()) return {};
+    return transposed_ ? transpose(mask_) : mask_;
 }
 
 /* Internal invariant: seams are always vertical in the internal orientation.
@@ -59,6 +86,7 @@ void SeamCarver::orient(bool vertical) {
     auto t0 = Clock::now();
     img_    = transpose(img_);
     origin_ = transpose(origin_);
+    if (!mask_.empty()) mask_ = transpose(mask_);
     if (opt_.forwardEnergy) gray_ = transpose(gray_);
     else                    energy_ = transpose(energy_);
     transposed_ = want;
@@ -68,7 +96,7 @@ void SeamCarver::orient(bool vertical) {
 Image SeamCarver::image() const { return transposed_ ? transpose(img_) : img_; }
 
 EnergyMap SeamCarver::energy() {
-    if (opt_.forwardEnergy) return computeEnergy(image(), opt_.energy);
+    if (opt_.forwardEnergy || !mask_.empty()) return computeEnergy(image(), opt_.energy);
     return transposed_ ? transpose(energy_) : energy_;
 }
 
@@ -77,7 +105,7 @@ Seam SeamCarver::findSeam(bool vertical) {
     auto t0 = Clock::now();
     Seam s;
     if (opt_.forwardEnergy) {
-        s = findVerticalSeamForwardDP(gray_);
+        s = findVerticalSeamForwardDP(gray_, nullptr, mask_.empty() ? nullptr : &mask_, kProtectPenalty);
     } else {
         switch (opt_.algo) {
             case Algorithm::DP:
@@ -115,13 +143,23 @@ void SeamCarver::removeSeam(bool vertical, const Seam& seam) {
     auto t0 = Clock::now();
     img_    = removeVerticalSeam(img_, seam.idx);
     origin_ = removeVerticalSeam(origin_, seam.idx);
+    if (!mask_.empty()) mask_ = removeVerticalSeam(mask_, seam.idx);
     stats_.removeMs += msSince(t0);
 
-    t0 = Clock::now();
-    if (opt_.forwardEnergy)          gray_ = removeVerticalSeam(gray_, seam.idx);
-    else if (opt_.incrementalEnergy) updateEnergyAfterSeamRemoval(energy_, img_, seam.idx, opt_.energy);
-    else                             energy_ = computeEnergy(img_, opt_.energy, opt_.threads);
-    stats_.energyMs += msSince(t0);
+    if (opt_.forwardEnergy) {
+        gray_ = removeVerticalSeam(gray_, seam.idx);
+    } else if (opt_.incrementalEnergy) {
+        t0 = Clock::now();
+        updateEnergyAfterSeamRemoval(energy_, img_, seam.idx, opt_.energy);
+        if (!mask_.empty())                       /* the recomputed band lost its penalty */
+            for (int y = 0; y < img_.h; ++y) {
+                int c = seam.idx[static_cast<size_t>(y)];
+                addPenalty(y, std::max(0, c - 2), std::min(img_.w - 1, c + 1));
+            }
+        stats_.energyMs += msSince(t0);
+    } else {
+        recomputeEnergy();
+    }
 
     stats_.seams += 1;
     stats_.totalCost += seam.cost;
@@ -133,9 +171,10 @@ void SeamCarver::removeSeam(bool vertical, const Seam& seam) {
 
 static RemovalMap buildMap(const Image& img, int steps, const CarveOptions& opt,
                            const std::function<bool(int, int)>& progress,
-                           std::vector<SeamRecord>* history, CarveStats* stats) {
+                           std::vector<SeamRecord>* history, CarveStats* stats,
+                           const ProtectMask* mask = nullptr) {
     steps = std::clamp(steps, 0, img.w - 1);
-    SeamCarver c(img, opt);
+    SeamCarver c(img, opt, mask);
     for (int s = 0; s < steps; ++s) {
         if (progress && !progress(s, steps)) break;
         c.step(true);
@@ -155,8 +194,23 @@ static RemovalMap buildMap(const Image& img, int steps, const CarveOptions& opt,
 }
 
 RemovalMap buildVerticalRemovalMap(const Image& img, int steps, const CarveOptions& opt,
-                                   const std::function<bool(int, int)>& progress) {
-    return buildMap(img, steps, opt, progress, nullptr, nullptr);
+                                   const std::function<bool(int, int)>& progress,
+                                   const ProtectMask* mask) {
+    return buildMap(img, steps, opt, progress, nullptr, nullptr, mask);
+}
+
+/* The mask follows the image through seam insertion: a duplicated pixel copies its flag. */
+static ProtectMask renderMaskWidth(const ProtectMask& m, const RemovalMap& map, int targetW) {
+    ProtectMask out(targetW, m.h);
+    const int k = targetW - m.w;
+    for (int y = 0; y < m.h; ++y) {
+        int ox = 0;
+        for (int x = 0; x < m.w; ++x) {
+            out.at(ox++, y) = m.at(x, y);
+            if (map.removedAt.at(x, y) < k) out.at(ox++, y) = m.at(x, y);
+        }
+    }
+    return out;
 }
 
 Image renderWidth(const Image& original, const RemovalMap& map, int targetW) {
@@ -192,8 +246,10 @@ Image renderWidth(const Image& original, const RemovalMap& map, int targetW) {
 }
 
 static Image enlargeWidthImpl(const Image& img, int k, const CarveOptions& opt,
-                              std::vector<SeamRecord>* seams, CarveStats* stats) {
+                              std::vector<SeamRecord>* seams, CarveStats* stats,
+                              ProtectMask* mask = nullptr) {     /* in: img's mask, out: result's */
     Image cur = img;
+    ProtectMask m = mask ? *mask : ProtectMask();
     bool first = true;
     while (k > 0) {
         if (cur.w == 1) {                                  /* the single column is the seam */
@@ -206,17 +262,21 @@ static Image enlargeWidthImpl(const Image& img, int k, const CarveOptions& opt,
          * include important content and every pixel would get duplicated */
         int chunk = std::min(k, std::max(1, cur.w / 2));
         std::vector<SeamRecord> hist;
-        RemovalMap map = buildMap(cur, chunk, opt, nullptr, &hist, stats);
+        RemovalMap map = buildMap(cur, chunk, opt, nullptr, &hist, stats, m.empty() ? nullptr : &m);
         if (first && seams) seams->insert(seams->end(), hist.begin(), hist.end());
+        if (!m.empty()) m = renderMaskWidth(m, map, cur.w + map.steps);
         cur = renderWidth(cur, map, cur.w + map.steps);
         k -= map.steps;
         first = false;
     }
+    if (mask) *mask = m;
     return cur;
 }
 
-Image enlargeWidth(const Image& img, int k, const CarveOptions& opt, std::vector<SeamRecord>* seams) {
-    return enlargeWidthImpl(img, k, opt, seams, nullptr);
+Image enlargeWidth(const Image& img, int k, const CarveOptions& opt, std::vector<SeamRecord>* seams,
+                   const ProtectMask* mask) {
+    ProtectMask m = mask ? *mask : ProtectMask();
+    return enlargeWidthImpl(img, k, opt, seams, nullptr, &m);
 }
 
 /* ==================================================================================== *
@@ -245,18 +305,21 @@ bool shrinkTo(SeamCarver& c, int targetW, int targetH, const StepCallback& cb) {
 }
 
 Image carveTo(const Image& img, int targetW, int targetH, const CarveOptions& opt,
-              const StepCallback& cb, CarveStats* stats, std::vector<SeamRecord>* seams) {
+              const StepCallback& cb, CarveStats* stats, std::vector<SeamRecord>* seams,
+              const ProtectMask* mask) {
     if (targetW < 1 || targetH < 1) throw std::invalid_argument("target size must be at least 1x1");
     auto t0 = Clock::now();
     CarveStats local;
     Image cur = img;
+    ProtectMask m = mask ? *mask : ProtectMask();         /* follows the image as it changes */
 
     /* ---- shrink: remove seams ---- */
     const int dW = std::max(0, img.w - targetW), dH = std::max(0, img.h - targetH);
     if (dW + dH > 0) {
-        SeamCarver c(img, opt);
+        SeamCarver c(img, opt, m.empty() ? nullptr : &m);
         shrinkTo(c, targetW, targetH, cb);
         cur = c.image();
+        if (!m.empty()) m = c.protectMask();
         local = c.stats();
         if (seams) *seams = c.history();
     }
@@ -265,13 +328,14 @@ Image carveTo(const Image& img, int targetW, int targetH, const CarveOptions& op
     const bool shrank = dW + dH > 0;
     if (targetW > cur.w) {
         std::vector<SeamRecord> rec;
-        cur = enlargeWidthImpl(cur, targetW - cur.w, opt, shrank ? nullptr : &rec, &local);
+        cur = enlargeWidthImpl(cur, targetW - cur.w, opt, shrank ? nullptr : &rec, &local, &m);
         if (seams && !shrank) seams->insert(seams->end(), rec.begin(), rec.end());
     }
     if (targetH > cur.h) {
         std::vector<SeamRecord> rec;
         const int natW = cur.w;
-        Image t = enlargeWidthImpl(transpose(cur), targetH - cur.h, opt, shrank ? nullptr : &rec, &local);
+        ProtectMask mt = m.empty() ? ProtectMask() : transpose(m);
+        Image t = enlargeWidthImpl(transpose(cur), targetH - cur.h, opt, shrank ? nullptr : &rec, &local, &mt);
         cur = transpose(t);
         if (seams && !shrank && targetW <= img.w) {
             for (SeamRecord& r : rec) {                      /* transposed -> natural coords */
@@ -285,6 +349,80 @@ Image carveTo(const Image& img, int targetW, int targetH, const CarveOptions& op
     local.totalMs = msSince(t0);
     if (stats) *stats = local;
     return cur;
+}
+
+/* ==================================================================================== *
+ *  Automatic target size                                                              *
+ * ==================================================================================== */
+
+const char* stopReasonText(StopReason r) {
+    switch (r) {
+        case StopReason::CostJump:  return "seam cost jumped (cheap content used up)";
+        case StopReason::Protected: return "next seam would cut a protected area";
+        case StopReason::Floor:     return "reached the safety floor";
+        case StopReason::None:      return "not analysed";
+    }
+    return "?";
+}
+
+static double medianOf(std::vector<double> v) {
+    if (v.empty()) return 0.0;
+    std::nth_element(v.begin(), v.begin() + static_cast<std::ptrdiff_t>(v.size() / 2), v.end());
+    return v[v.size() / 2];
+}
+
+/* Carve one direction on c until the floor or protection, recording the energy per pixel
+ * of each seam; return how many seams to remove and why it stops there.               */
+static int analyse(SeamCarver& c, bool vertical, int floorSize, const AutoSizeParams& p,
+                   std::vector<double>& costs, StopReason& reason) {
+    const int full = vertical ? c.width() : c.height();
+    const int maxSteps = std::max(0, full - floorSize);
+    int protStop = -1;
+    for (int s = 0; s < maxSteps; ++s) {
+        const int len = vertical ? c.height() : c.width();
+        Seam seam = c.findSeam(vertical);
+        if (crossesProtection(seam)) { protStop = s; break; }      /* no seam avoids the mask */
+        costs.push_back(static_cast<double>(seam.cost) / len);
+        c.removeSeam(vertical, seam);
+    }
+    const int n = static_cast<int>(costs.size());
+
+    /* knee: the first seam whose neighbourhood costs well above the opening seams
+     * (baseline = median of the first 5% of the dimension, at least 3 seams)        */
+    const int nb = std::max(3, full / 20);
+    if (n > nb) {
+        const double base = medianOf(std::vector<double>(costs.begin(), costs.begin() + nb));
+        const double thr  = std::max(p.jump * base, base + p.minRise);
+        for (int i = nb; i < n; ++i) {
+            std::vector<double> win(costs.begin() + std::max(0, i - 2), costs.begin() + std::min(n, i + 3));
+            if (medianOf(win) > thr) { reason = StopReason::CostJump; return i; }
+        }
+    }
+    reason = protStop >= 0 ? StopReason::Protected : StopReason::Floor;
+    return n;
+}
+
+AutoSizeResult autoSize(const Image& img, const CarveOptions& opt, const ProtectMask* mask,
+                        const AutoSizeParams& params) {
+    CarveOptions a = opt;
+    if (a.algo == Algorithm::GraphCut) a.algo = Algorithm::DP;     /* same seam costs, far faster */
+    AutoSizeResult r;
+    r.width = img.w; r.height = img.h;
+    auto floorOf = [&](int full) { return std::max(1, static_cast<int>(std::ceil(params.minFraction * full))); };
+
+    int stopW = 0;
+    if (params.width && img.w > 1) {
+        SeamCarver c(img, a, mask);
+        stopW = analyse(c, true, floorOf(img.w), params, r.widthCosts, r.widthReason);
+        r.width = img.w - stopW;
+    }
+    if (params.height && img.h > 1) {
+        SeamCarver c(img, a, mask);                     /* height is judged after the width cut */
+        for (int k = 0; k < stopW; ++k) c.step(true);
+        const int stopH = analyse(c, false, floorOf(img.h), params, r.heightCosts, r.heightReason);
+        r.height = img.h - stopH;
+    }
+    return r;
 }
 
 }  // namespace sc

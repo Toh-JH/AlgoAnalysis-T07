@@ -45,6 +45,22 @@ struct CarveOptions {
     Order       order             = Order::WidthFirst;
 };
 
+/* ------------------------------------------------------------------------------------ *
+ *  Object protection (Avidan & Shamir sec. 4.4).  A ProtectMask has the image's size;
+ *  a non-zero cell marks a pixel the user painted as "must survive".  Its energy gets
+ *  kProtectPenalty added, which exceeds the cost of ANY unprotected seam (at most
+ *  6120 per pixel x seam length < 2^27 for seams under ~21,900 pixels).  Therefore:
+ *    - every finder avoids protected pixels whenever some seam can, with no change to
+ *      the DP, greedy or graph-cut code; and
+ *    - a seam's cost is >= kProtectPenalty  <=>  it is forced through protection.
+ * ------------------------------------------------------------------------------------ */
+using ProtectMask = Grid<uint8_t>;
+constexpr int32_t kProtectPenalty = int32_t(1) << 27;
+inline bool crossesProtection(const Seam& s) { return s.cost >= kProtectPenalty; }
+
+/* Pixels brighter than mid-grey in a mask image are protected. */
+ProtectMask maskFromImage(const Image& maskImg);
+
 /* One removed seam, in ORIGINAL image coordinates (linear index y*W0 + x). */
 struct SeamRecord {
     bool             vertical = true;
@@ -65,12 +81,13 @@ using StepCallback = std::function<bool(const Image& current, const Seam& seam, 
 
 class SeamCarver {
 public:
-    SeamCarver(const Image& img, const CarveOptions& opt);
+    /* mask (optional) must match the image size; it is copied. */
+    SeamCarver(const Image& img, const CarveOptions& opt, const ProtectMask* mask = nullptr);
 
     int   width()  const { return transposed_ ? img_.h : img_.w; }
     int   height() const { return transposed_ ? img_.w : img_.h; }
     Image image() const;                          /* current image, natural orientation */
-    EnergyMap energy();                           /* current energy, natural orientation */
+    EnergyMap energy();                           /* raw energy (no penalty), natural */
 
     /* vertical: idx[y] = x ;  horizontal: idx[x] = y  (natural coordinates) */
     Seam    findSeam(bool vertical);
@@ -80,18 +97,21 @@ public:
     const std::vector<SeamRecord>& history() const { return history_; }
     const CarveStats&              stats()   const { return stats_; }
     const CarveOptions&            options() const { return opt_; }
+    ProtectMask protectMask() const;              /* current mask (natural); may be empty */
     int originalWidth()  const { return W0_; }
     int originalHeight() const { return H0_; }
 
 private:
     void orient(bool vertical);                   /* make internal seams vertical */
     void recomputeEnergy();
+    void addPenalty(int y, int x0, int x1);       /* protection, internal orientation */
 
     CarveOptions  opt_;
     Image         img_;                           /* internal orientation */
     EnergyMap     energy_;
     Grid<uint8_t> gray_;                          /* forward energy only  */
     Grid<int32_t> origin_;                        /* original linear index per pixel */
+    ProtectMask   mask_;                          /* empty when nothing is protected  */
     bool          transposed_ = false;
     int           W0_, H0_;
     std::vector<SeamRecord> history_;
@@ -105,11 +125,11 @@ bool shrinkTo(SeamCarver& c, int targetW, int targetH, const StepCallback& cb = 
 /* Resize to exactly targetW x targetH: seam removal to shrink, seam insertion to grow. */
 Image carveTo(const Image& img, int targetW, int targetH, const CarveOptions& opt,
               const StepCallback& cb = nullptr, CarveStats* stats = nullptr,
-              std::vector<SeamRecord>* seams = nullptr);
+              std::vector<SeamRecord>* seams = nullptr, const ProtectMask* mask = nullptr);
 
 /* Insert k vertical seams (k may exceed the width: done in passes of <= w/2). */
 Image enlargeWidth(const Image& img, int k, const CarveOptions& opt,
-                   std::vector<SeamRecord>* seams = nullptr);
+                   std::vector<SeamRecord>* seams = nullptr, const ProtectMask* mask = nullptr);
 
 /* ------------------------------------------------------------------------------------ *
  *  Multi-size map (Avidan & Shamir sec. 4): carve once, remember WHEN each pixel was
@@ -123,7 +143,40 @@ struct RemovalMap {
 };
 
 RemovalMap buildVerticalRemovalMap(const Image& img, int steps, const CarveOptions& opt,
-                                   const std::function<bool(int, int)>& progress = nullptr);
+                                   const std::function<bool(int, int)>& progress = nullptr,
+                                   const ProtectMask* mask = nullptr);
 Image renderWidth(const Image& original, const RemovalMap& map, int targetW);
+
+/* ------------------------------------------------------------------------------------ *
+ *  Automatic target size.  Carving a copy one direction at a time, record each seam's
+ *  energy per pixel.  Stop at the FIRST of:
+ *    Protected  the next seam would have to cross a protected pixel (exact: its cost
+ *               is >= kProtectPenalty, i.e. no seam can avoid the mask any more)
+ *    CostJump   the seam cost (median of 5 neighbouring seams) exceeds
+ *               max(jump x baseline, baseline + minRise), baseline = median of the
+ *               first seams: the cheap content (sky, wall, water) has run out
+ *    Floor      the safety limit minFraction of the original size
+ *  Width is decided first, then height on the width-reduced image (the same order
+ *  carveTo uses, so carveTo(result.width, result.height) reproduces it exactly).
+ * ------------------------------------------------------------------------------------ */
+enum class StopReason { None, CostJump, Protected, Floor };
+const char* stopReasonText(StopReason r);
+
+struct AutoSizeParams {
+    double minFraction = 0.6;    /* never go below 60% of a dimension            */
+    double jump        = 3.0;    /* "the cost tripled"                           */
+    double minRise     = 25.0;   /* ... and rose by at least this (energy/pixel) */
+    bool   width = true, height = true;
+};
+
+struct AutoSizeResult {
+    int width = 0, height = 0;
+    StopReason widthReason = StopReason::None, heightReason = StopReason::None;
+    std::vector<double> widthCosts, heightCosts;   /* energy per pixel of each seam tried */
+};
+
+/* Graph cut is analysed with DP (identical seam costs, 1000x faster). */
+AutoSizeResult autoSize(const Image& img, const CarveOptions& opt, const ProtectMask* mask = nullptr,
+                        const AutoSizeParams& params = {});
 
 }  // namespace sc

@@ -16,6 +16,12 @@
  *      --seams FILE                      save all removed seams drawn on the original
  *      --energy-map FILE                 save the energy map of the input
  *      --frames DIR [--every N]          save a frame (seam in red) every N seams
+ *      --protect MASK                    mask image, same size: white = keep (never carved)
+ *      --auto                            choose the width/height automatically (whichever
+ *                                        of --width/--height is not given): stop when the
+ *                                        next seam would cut the mask or its cost jumps
+ *      --auto-floor F                    never go below F x the original size (default 0.6)
+ *      --cost-curve FILE                 with --auto: write each seam's energy per pixel (CSV)
  *
  *    seamcarve --demo OUTDIR [--input IMG] [--quick]
  *      Generates every figure used in the report, plus demo_summary.txt.
@@ -48,6 +54,7 @@ static void usage() {
         "                 [--energy sobel|gradient] [--forward] [--flow dinic|ek]\n"
         "                 [--order width|height|alternate] [--threads N] [--no-incremental]\n"
         "                 [--seams FILE] [--energy-map FILE] [--frames DIR [--every N]]\n"
+        "                 [--protect MASK] [--auto [--auto-floor F] [--cost-curve FILE]]\n"
         "seamcarve --demo OUTDIR [--input IMG] [--quick]\n";
 }
 
@@ -167,8 +174,10 @@ int main(int argc, char** argv) {
         if (a.size() < 2) { usage(); return 1; }
 
         Image img = loadImage(a[0]);
-        std::string out = a[1], wS, hS, seamsFile, energyFile, framesDir;
+        std::string out = a[1], wS, hS, seamsFile, energyFile, framesDir, protectFile, curveFile;
         int every = 1;
+        bool autoMode = false;
+        AutoSizeParams ap;
         CarveOptions o;
         for (size_t i = 2; i < a.size(); ++i) {
             auto next = [&]() -> std::string {
@@ -188,10 +197,39 @@ int main(int argc, char** argv) {
             else if (a[i] == "--energy-map")     energyFile = next();
             else if (a[i] == "--frames")         framesDir = next();
             else if (a[i] == "--every")          every = std::max(1, std::stoi(next()));
+            else if (a[i] == "--protect")        protectFile = next();
+            else if (a[i] == "--auto")           autoMode = true;
+            else if (a[i] == "--auto-floor")     ap.minFraction = std::clamp(std::stod(next()), 0.0, 1.0);
+            else if (a[i] == "--cost-curve")     curveFile = next();
             else throw std::invalid_argument("unknown option " + a[i]);
         }
+        ProtectMask mask;
+        if (!protectFile.empty()) {
+            mask = maskFromImage(loadImage(protectFile));
+            if (mask.w != img.w || mask.h != img.h) throw std::invalid_argument("--protect mask must be the same size as the image");
+        }
+        const ProtectMask* maskPtr = mask.empty() ? nullptr : &mask;
+
         int tw = wS.empty() ? img.w : parseSize(wS, img.w);
         int th = hS.empty() ? img.h : parseSize(hS, img.h);
+        if (autoMode) {
+            ap.width = wS.empty(); ap.height = hS.empty();
+            AutoSizeResult r = autoSize(img, o, maskPtr, ap);
+            if (ap.width) {
+                tw = r.width;
+                std::cout << "auto width  " << tw << " px (" << 100 * tw / img.w << "%): " << stopReasonText(r.widthReason) << "\n";
+            }
+            if (ap.height) {
+                th = r.height;
+                std::cout << "auto height " << th << " px (" << 100 * th / img.h << "%): " << stopReasonText(r.heightReason) << "\n";
+            }
+            if (!curveFile.empty()) {
+                std::ofstream f(curveFile);
+                f << "direction,seam,energy_per_pixel\n";
+                for (size_t i = 0; i < r.widthCosts.size(); ++i)  f << "width," << i << "," << r.widthCosts[i] << "\n";
+                for (size_t i = 0; i < r.heightCosts.size(); ++i) f << "height," << i << "," << r.heightCosts[i] << "\n";
+            }
+        }
         if (!energyFile.empty()) saveImage(energyToImage(computeEnergy(img, o.energy)), energyFile);
         if (!framesDir.empty()) fs::create_directories(framesDir);
 
@@ -206,7 +244,7 @@ int main(int argc, char** argv) {
             };
         CarveStats st;
         std::vector<SeamRecord> seams;
-        Image res = carveTo(img, tw, th, o, cb, &st, &seams);
+        Image res = carveTo(img, tw, th, o, cb, &st, &seams, maskPtr);
         saveImage(res, out);
         if (!seamsFile.empty()) saveImage(overlaySeams(img, seams), seamsFile);
         std::cout << img.w << "x" << img.h << " -> " << res.w << "x" << res.h << "  [" << algorithmName(o.algo)

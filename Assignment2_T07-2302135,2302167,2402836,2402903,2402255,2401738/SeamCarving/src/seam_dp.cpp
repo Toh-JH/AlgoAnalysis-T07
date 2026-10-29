@@ -176,14 +176,18 @@ static inline FwdCosts forwardCosts(const Grid<uint8_t>& g, int x, int y) {
     return {cu + std::abs(U - L), cu, cu + std::abs(U - R)};
 }
 
-Seam findVerticalSeamForwardDP(const Grid<uint8_t>& gray, DPStats* stats) {
+Seam findVerticalSeamForwardDP(const Grid<uint8_t>& gray, DPStats* stats,
+                               const Grid<uint8_t>* protect, int64_t penalty) {
     const int w = gray.w, h = gray.h;
+    auto pen = [&](int x, int y) -> int64_t { return protect && protect->at(x, y) ? penalty : 0; };
     std::vector<int64_t> prev(static_cast<size_t>(w)), cur(static_cast<size_t>(w));
     Grid<int8_t> from(w, h, 0);
-    for (int x = 0; x < w; ++x) prev[static_cast<size_t>(x)] = forwardCosts(gray, x, 0).cu;
+    for (int x = 0; x < w; ++x) prev[static_cast<size_t>(x)] = forwardCosts(gray, x, 0).cu + pen(x, 0);
     for (int y = 1; y < h; ++y) {
         for (int x = 0; x < w; ++x) {
             FwdCosts c = forwardCosts(gray, x, y);
+            const int64_t p = pen(x, y);               /* same pixel whichever parent wins */
+            c.cl += p; c.cu += p; c.cr += p;
             int     best = 0;
             int64_t bv   = prev[static_cast<size_t>(x)] + c.cu;
             if (x > 0     && prev[static_cast<size_t>(x - 1)] + c.cl < bv) { bv = prev[static_cast<size_t>(x - 1)] + c.cl; best = -1; }

@@ -40,11 +40,14 @@ bin\seamcarve.exe in.jpg out.png --width 70% --algo dp --seams seams.png
 bin\seamcarve.exe in.jpg out.png --width 120% --height 80% --forward
 bin\seamcarve.exe in.jpg out.png --width 300 --algo graphcut --flow dinic
 bin\seamcarve.exe in.jpg out.png --width 70% --frames frames --every 5
+bin\seamcarve.exe in.jpg out.png --auto --protect mask.png --seams seams.png
 bin\seamcarve.exe --demo results\figures [--input photo.jpg]
 ```
 
-**GUI** (bonus 7a, 7b): open an image, choose the algorithm and energy, drag the
-width/height sliders, press **Carve**.
+**GUI** (bonus 7a, 7b): the window starts empty. Click **Open image...** (it opens in
+`tests\`, which holds the test photos `test1.jpeg` to `test3.jpeg`), choose the algorithm
+and energy, drag the width/height sliders, and press **Carve**. Photos larger than about
+1 megapixel are scaled to a 1000-px longest side so the GUI stays interactive.
 
 | Control | What it does |
 |---|---|
@@ -53,6 +56,8 @@ width/height sliders, press **Carve**.
 | **Removed seams** view | Shows all removed seams on the original. |
 | **Energy map** view | Shows the energy map. |
 | **Live width** | Precomputes a multi-size map once; after that the width slider is real-time. |
+| **Paint protection** | Paint over objects that must survive (left drag paints, right drag erases); seams go around them. |
+| **Auto size** | Finds the smallest size before the next seam would cut a protected area or the seam cost jumps (60% floor), then carves to it. |
 
 ## Layout
 
@@ -65,15 +70,16 @@ src/seam_dp.*        DP: full table, compact (rolling rows + int8 parents), Open
                      native horizontal, forward energy, seam counting
 src/seam_greedy.*    greedy and best-start greedy
 src/seam_graphcut.*  MaxFlow (Edmonds-Karp, Dinic) + seam-as-min-cut graph
-src/carver.*         SeamCarver (remove & repeat, both directions), seam insertion, multi-size map
+src/carver.*         SeamCarver (remove & repeat, both directions), seam insertion, multi-size map,
+                     protect mask, automatic target size
 src/visualize.*      seam overlays, step frames, synthetic test scenes
 apps/                CLI (+ figure generator), Win32 GUI, benchmark
-tests/tests.cpp      101 correctness tests
+tests/tests.cpp      115 correctness tests
 tools/make_charts.py charts for the report from the benchmark CSVs
 results/             figures, charts, benchmark CSVs, test transcript
 ```
 
-## Correctness evidence (`tests/tests.cpp`, 101 tests)
+## Correctness evidence (`tests/tests.cpp`, 115 tests)
 
 - **DP vs brute force:** DP equals exhaustive enumeration of every seam on all grids up to 7×6 (41,588 seams).
 - **Graph cut vs DP:** Edmonds–Karp and Dinic give exactly the DP seam cost on 300 random maps, and the max-flow value equals the cut capacity.
@@ -82,6 +88,7 @@ results/             figures, charts, benchmark CSVs, test transcript
 - **Multi-size map:** reproduces sequential carving and seam insertion pixel-for-pixel.
 - **Seam counting:** the counting DP matches enumeration, and N(m, n) ≥ 2^m for n ≥ 2 (item 2a(i)).
 - **Graph-construction fix:** the brief's construction with an infinite-capacity sink edge on the last column cannot remove a last-column pixel. We use a finite sink edge `e[i][n-1]` instead, and a test demonstrates the difference.
+- **Object protection:** no protected pixel is ever removed (DP, forward energy, graph cut); a 10-px protected stripe stops auto width at exactly 10 px.
 - **Edge cases:** 1×1, single row/column, carve to 1 pixel, more than 2× enlargement, invalid input.
 
 ## CI/CD (bonus 7c)

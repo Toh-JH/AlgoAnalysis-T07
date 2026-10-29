@@ -117,6 +117,22 @@ Seam carving - correctness suite
     [PASS] rendering outside the precomputed range throws
     [PASS] DP seams avoid the towers (hit them at < half the rate of uniform removal)  (8.15104% of removed pixels, towers are 28% of the width)
 
+== Object protection and automatic size ==
+    [PASS] penalty exceeds any unprotected seam up to 20,000 pixels long (6120 x 20000 < 2^27)
+    [PASS] dp: no protected pixel removed (6 images, 23 seams each)
+    [PASS] dp forward: no protected pixel removed (6 images, 23 seams each)
+    [PASS] graphcut: no protected pixel removed (6 images, 23 seams each)
+    [PASS] masked carve: incremental energy == full recompute
+    [PASS] enlarging with a mask reaches the target
+    [PASS] mask of the wrong size is rejected
+    [PASS] maskFromImage: brighter than mid-grey = protected
+    [PASS] full-height protected stripe 10 px wide: auto width = 10 exactly  (width 10 (next seam would cut a protected area), height 20)
+    [PASS] ...and no horizontal seam can avoid it: height unchanged
+    [PASS] 12 flat sky rows over noise: auto height = 28 +/- 2 by cost jump  (auto height 29, expected about 28 (seam cost jumped (cheap content used up)))
+    [PASS] auto size never goes below the 70% floor
+    [PASS] tower scene with a mask: carving to the auto size removes no protected pixel  (96x64 -> 58x47)
+    [PASS] graph cut auto size (analysed with DP) == DP auto size
+
 == Edge cases ==
     [PASS] 1x1 -> 1x1 is a no-op
     [PASS] single-row image: each seam is one pixel, 9 -> 4
@@ -130,4 +146,4 @@ Seam carving - correctness suite
     [PASS] empty image is rejected
 
 == SUMMARY ==
-    101 passed, 0 failed
+    115 passed, 0 failed

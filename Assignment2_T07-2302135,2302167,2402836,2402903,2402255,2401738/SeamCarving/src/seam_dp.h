@@ -41,7 +41,10 @@ Seam findVerticalSeamDPCompact(const EnergyMap& e, DPStats* stats = nullptr);
 Seam findVerticalSeamDPParallel(const EnergyMap& e, int threads, DPStats* stats = nullptr);
 Seam findHorizontalSeamDP(const EnergyMap& e, DPStats* stats = nullptr);
 
-Seam    findVerticalSeamForwardDP(const Grid<uint8_t>& gray, DPStats* stats = nullptr);
+/* protect/penalty: optional object protection - penalty is added to every protected
+ * pixel's cost (forward energy has no energy map to add it to).                   */
+Seam    findVerticalSeamForwardDP(const Grid<uint8_t>& gray, DPStats* stats = nullptr,
+                                  const Grid<uint8_t>* protect = nullptr, int64_t penalty = 0);
 int64_t forwardSeamCost(const Grid<uint8_t>& gray, const std::vector<int>& idx);
 
 /* Item 2(a)(i): exact number of vertical seams in an m-row, n-column image, by the
