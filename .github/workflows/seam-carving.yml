@@ -15,10 +15,10 @@ name: seam-carving
 on:
   push:
     branches: ["**"]
-    paths: ["Assignment2_*/SeamCarving/**", ".github/workflows/seam-carving.yml"]
+    paths: ["Assignment2_*/T07_sourcefile/**", ".github/workflows/seam-carving.yml"]
     tags: ["a2-v*"]          # path filters are not applied to tag pushes
   pull_request:
-    paths: ["Assignment2_*/SeamCarving/**", ".github/workflows/seam-carving.yml"]
+    paths: ["Assignment2_*/T07_sourcefile/**", ".github/workflows/seam-carving.yml"]
   workflow_dispatch:
 
 permissions:
@@ -41,7 +41,7 @@ jobs:
       # The folder name contains the team's student IDs; find it instead of hard-coding it.
       - name: Locate project
         id: loc
-        run: echo "dir=$(ls -d Assignment2_*/SeamCarving | head -n 1)" >> "$GITHUB_OUTPUT"
+        run: echo "dir=$(ls -d Assignment2_*/T07_sourcefile | head -n 1)" >> "$GITHUB_OUTPUT"
 
       - name: Configure
         working-directory: ${{ steps.loc.outputs.dir }}
@@ -95,7 +95,7 @@ jobs:
       - uses: actions/checkout@v4
       - name: Locate project
         id: loc
-        run: echo "dir=$(ls -d Assignment2_*/SeamCarving | head -n 1)" >> "$GITHUB_OUTPUT"
+        run: echo "dir=$(ls -d Assignment2_*/T07_sourcefile | head -n 1)" >> "$GITHUB_OUTPUT"
       - name: Build
         working-directory: ${{ steps.loc.outputs.dir }}
         run: |
